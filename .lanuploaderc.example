@@ -2,9 +2,10 @@
 # Copy to ~/.lanuploaderc to use
 #
 # Configuration priority:
-#   1. Environment variables (highest)
-#   2. This config file
-#   3. Hardcoded defaults (lowest)
+#   1. Command line arguments (highest)
+#   2. Environment variables
+#   3. This config file
+#   4. Hardcoded defaults (lowest)
 
 [lanuploader]
 # Upload root directory (default: ./uploads)
@@ -15,3 +16,8 @@ MAX_CONTENT_LENGTH_MB = 1024
 
 # Server port (default: 8080)
 PORT = 8080
+
+# Host to bind to (default: 0.0.0.0)
+# Use 0.0.0.0 to accept connections from any network interface (LAN access)
+# Use 127.0.0.1 to only accept connections from localhost (local testing)
+HOST = 0.0.0.0

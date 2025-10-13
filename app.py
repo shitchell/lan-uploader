@@ -29,6 +29,11 @@ def parse_args():
         type=int,
         help="Server port (default: 8080)",
     )
+    parser.add_argument(
+        "--host",
+        type=str,
+        help="Host to bind to (default: 0.0.0.0, use 127.0.0.1 for localhost only)",
+    )
     return parser.parse_args()
 
 def load_config(args=None):
@@ -38,6 +43,7 @@ def load_config(args=None):
         "UPLOAD_ROOT": "./uploads",
         "MAX_CONTENT_LENGTH_MB": "1024",
         "PORT": "8080",
+        "HOST": "0.0.0.0",
     }
 
     # Read from config file if it exists
@@ -63,6 +69,8 @@ def load_config(args=None):
             config["MAX_CONTENT_LENGTH_MB"] = str(args.max_size)
         if args.port is not None:
             config["PORT"] = str(args.port)
+        if args.host is not None:
+            config["HOST"] = args.host
 
     return config
 
@@ -71,6 +79,7 @@ config = load_config(args)
 UPLOAD_ROOT = Path(config["UPLOAD_ROOT"]).resolve()
 MAX_CONTENT_LENGTH = int(config["MAX_CONTENT_LENGTH_MB"]) * 1024 * 1024  # MB -> bytes
 PORT = int(config["PORT"])
+HOST = config["HOST"]
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT_LENGTH
@@ -214,5 +223,5 @@ def healthz():
     return {"ok": True, "root": str(UPLOAD_ROOT)}, 200
 
 if __name__ == "__main__":
-    # Bind on all interfaces for LAN access
-    app.run(host="0.0.0.0", port=PORT, debug=True)
+    # Bind to configured host (0.0.0.0 for LAN access, 127.0.0.1 for localhost only)
+    app.run(host=HOST, port=PORT, debug=True)

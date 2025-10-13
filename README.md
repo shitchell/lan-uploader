@@ -45,23 +45,26 @@ Configuration is loaded in this priority order:
 - `UPLOAD_ROOT`: absolute or relative path to the root directory for uploads (default: `./uploads`)
 - `MAX_CONTENT_LENGTH_MB` / `max-size`: max request size in megabytes (default: `1024` = 1GB)
 - `PORT`: HTTP port (default: `8080`)
+- `HOST`: host to bind to - `0.0.0.0` for LAN access, `127.0.0.1` for localhost only (default: `0.0.0.0`)
 
 ### Command Line Arguments
 ```bash
 python app.py --help
-python app.py --upload-root /path/to/uploads --port 8080 --max-size 2048
+python app.py --upload-root /path/to/uploads --port 8080 --max-size 2048 --host 0.0.0.0
 ```
 
 Options:
 - `--upload-root PATH`: Upload root directory
 - `--port PORT`: Server port
 - `--max-size MB`: Maximum upload size in megabytes
+- `--host HOST`: Host to bind to (0.0.0.0 for LAN, 127.0.0.1 for localhost only)
 
 ### Environment Variables
 ```bash
 export UPLOAD_ROOT="/var/mywebapp/uploads"
 export PORT=8080
 export MAX_CONTENT_LENGTH_MB=2048
+export HOST=0.0.0.0
 python app.py
 ```
 
@@ -72,6 +75,7 @@ Create `~/.lanuploaderc` with INI format:
 UPLOAD_ROOT = /var/mywebapp/uploads
 MAX_CONTENT_LENGTH_MB = 2048
 PORT = 8080
+HOST = 0.0.0.0
 ```
 
 See `.lanuploaderc.example` for a template.

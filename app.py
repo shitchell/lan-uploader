@@ -223,5 +223,15 @@ def healthz():
     return {"ok": True, "root": str(UPLOAD_ROOT)}, 200
 
 if __name__ == "__main__":
+    # Print configuration on startup
+    print("\n" + "="*50)
+    print("LAN Uploader Configuration")
+    print("="*50)
+    print(f"Upload Root:    {UPLOAD_ROOT}")
+    print(f"Max Size:       {config['MAX_CONTENT_LENGTH_MB']} MB")
+    print(f"Host:           {HOST}")
+    print(f"Port:           {PORT}")
+    print("="*50 + "\n")
+
     # Bind to configured host (0.0.0.0 for LAN access, 127.0.0.1 for localhost only)
     app.run(host=HOST, port=PORT, debug=True)

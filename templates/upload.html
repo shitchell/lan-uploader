@@ -100,7 +100,7 @@ function updateFilePreview() {
 
     const removeBtn = document.createElement('button');
     removeBtn.className = 'file-remove';
-    removeBtn.textContent = '×';
+    removeBtn.textContent = 'Remove';
     removeBtn.title = 'Remove file';
     removeBtn.addEventListener('click', () => removeFile(index));
 
@@ -119,22 +119,58 @@ function removeFile(index) {
     if (i !== index) dt.items.add(file);
   });
   fi.files = dt.files;
+  storedFiles = Array.from(fi.files);
   updateFilePreview();
 }
 
 clearFilesBtn.addEventListener('click', () => {
   fi.value = '';
+  storedFiles = [];
   updateFilePreview();
 });
 
-fi.addEventListener('change', updateFilePreview);
+// Store previously selected files for cumulative selection
+let storedFiles = [];
+
+fi.addEventListener('change', () => {
+  // Merge existing files with newly selected files (cumulative selection)
+  if (fi.files && fi.files.length > 0) {
+    const dt = new DataTransfer();
+
+    // Add previously stored files first
+    storedFiles.forEach(f => dt.items.add(f));
+
+    // Add newly selected files
+    Array.from(fi.files).forEach(f => dt.items.add(f));
+
+    // Update the input's files with merged list
+    fi.files = dt.files;
+
+    // Store current files for next selection
+    storedFiles = Array.from(fi.files);
+  }
+
+  updateFilePreview();
+});
 
 dz.addEventListener('click', () => fi.click());
 dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
 dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
 dz.addEventListener('drop', e => {
   e.preventDefault(); dz.classList.remove('dragover');
-  fi.files = e.dataTransfer.files;
+
+  // Merge dropped files with existing files (cumulative)
+  const dt = new DataTransfer();
+
+  // Add existing files first
+  storedFiles.forEach(f => dt.items.add(f));
+
+  // Add newly dropped files
+  Array.from(e.dataTransfer.files).forEach(f => dt.items.add(f));
+
+  fi.files = dt.files;
+  storedFiles = Array.from(fi.files);
+
   updateFilePreview();
 });
 
@@ -207,6 +243,7 @@ upBtn.addEventListener('click', async () => {
     setStatus(`✅ Uploaded ${count} file(s) to /${data.target_dir || ""}`, "success");
     // Clear selection and preview
     fi.value = '';
+    storedFiles = [];
     updateFilePreview();
   } catch (e) {
     setStatus("Upload failed: " + e.message, "error");

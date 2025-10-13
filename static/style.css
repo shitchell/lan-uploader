@@ -1,5 +1,89 @@
 :root {
   --pad: 14px;
+
+  /* Light mode colors (default) */
+  --bg-color: #ffffff;
+  --text-color: #000000;
+  --text-muted: #666666;
+  --border-color: #cccccc;
+  --border-light: #eeeeee;
+
+  /* Interactive elements */
+  --primary-color: #2d7ef7;
+  --primary-hover: #1e6de5;
+
+  /* Backgrounds */
+  --bg-secondary: #f2f2f2;
+  --bg-tertiary: #fafafa;
+  --bg-highlight: #f4f7ff;
+
+  /* Dropzone */
+  --dropzone-border: #999999;
+  --dropzone-text: #555555;
+  --dropzone-hover-bg: #f4f7ff;
+  --dropzone-hover-border: #2d7ef7;
+  --dropzone-hover-text: #2d7ef7;
+
+  /* Status colors */
+  --success-color: #0a7a28;
+  --error-color: #a40000;
+
+  /* Pill/badge */
+  --pill-bg: #eef0f7;
+  --pill-text: #4a4d57;
+
+  /* File remove button */
+  --remove-bg: #f44336;
+  --remove-hover: #d32f2f;
+
+  /* Input fields */
+  --input-bg: #ffffff;
+  --input-border: #cccccc;
+  --input-text: #000000;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Dark mode colors */
+    --bg-color: #1a1a1a;
+    --text-color: #e0e0e0;
+    --text-muted: #a0a0a0;
+    --border-color: #404040;
+    --border-light: #333333;
+
+    /* Interactive elements */
+    --primary-color: #4a9eff;
+    --primary-hover: #6ab0ff;
+
+    /* Backgrounds */
+    --bg-secondary: #2a2a2a;
+    --bg-tertiary: #252525;
+    --bg-highlight: #1e2a3a;
+
+    /* Dropzone */
+    --dropzone-border: #666666;
+    --dropzone-text: #a0a0a0;
+    --dropzone-hover-bg: #1e2a3a;
+    --dropzone-hover-border: #4a9eff;
+    --dropzone-hover-text: #4a9eff;
+
+    /* Status colors */
+    --success-color: #4ade80;
+    --error-color: #ef4444;
+
+    /* Pill/badge */
+    --pill-bg: #2a2a2a;
+    --pill-text: #a0a0a0;
+
+    /* File remove button */
+    --remove-bg: #dc2626;
+    --remove-hover: #b91c1c;
+
+    /* Input fields */
+    --input-bg: #252525;
+    --input-border: #404040;
+    --input-text: #e0e0e0;
+  }
 }
 
 body {
@@ -8,6 +92,8 @@ body {
   padding: var(--pad);
   max-width: 720px;
   margin-inline: auto;
+  background-color: var(--bg-color);
+  color: var(--text-color);
 }
 
 header {
@@ -18,6 +104,7 @@ header {
 h1 {
   font-size: 1.2rem;
   margin: 0;
+  color: var(--text-color);
 }
 
 .row {
@@ -35,19 +122,25 @@ h1 {
 input[type="text"] {
   width: 100%;
   padding: 12px;
-  border: 1px solid #ccc;
+  border: 1px solid var(--input-border);
   border-radius: 10px;
   font-size: 16px;
+  background-color: var(--input-bg);
+  color: var(--input-text);
 }
 
 button, .btn {
   padding: 12px 14px;
   font-size: 16px;
   border: none;
-  background: #2d7ef7;
+  background: var(--primary-color);
   color: white;
   border-radius: 10px;
   cursor: pointer;
+}
+
+button:hover {
+  background: var(--primary-hover);
 }
 
 button:active {
@@ -55,23 +148,23 @@ button:active {
 }
 
 .muted {
-  color: #666;
+  color: var(--text-muted);
   font-size: 0.9rem;
 }
 
 .dropzone {
-  border: 2px dashed #999;
+  border: 2px dashed var(--dropzone-border);
   border-radius: 16px;
   padding: 24px;
   text-align: center;
-  color: #555;
+  color: var(--dropzone-text);
   user-select: none;
 }
 
 .dropzone.dragover {
-  background: #f4f7ff;
-  border-color: #2d7ef7;
-  color: #2d7ef7;
+  background: var(--dropzone-hover-bg);
+  border-color: var(--dropzone-hover-border);
+  color: var(--dropzone-hover-text);
 }
 
 .hidden {
@@ -79,9 +172,10 @@ button:active {
 }
 
 .dirbrowser {
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 10px;
+  background-color: var(--bg-tertiary);
 }
 
 .crumbs {
@@ -93,10 +187,15 @@ button:active {
 
 .crumbs a {
   text-decoration: none;
-  background: #f2f2f2;
+  background: var(--bg-secondary);
   padding: 4px 8px;
   border-radius: 999px;
-  color: #333;
+  color: var(--text-color);
+}
+
+.crumbs a:hover {
+  background: var(--primary-color);
+  color: white;
 }
 
 .dirlist {
@@ -107,10 +206,15 @@ button:active {
 
 .dir {
   padding: 10px;
-  border: 1px solid #eee;
+  border: 1px solid var(--border-light);
   border-radius: 10px;
-  background: #fafafa;
+  background: var(--bg-tertiary);
   cursor: pointer;
+  color: var(--text-color);
+}
+
+.dir:hover {
+  background: var(--bg-secondary);
 }
 
 .dir:active {
@@ -118,17 +222,17 @@ button:active {
 }
 
 .success {
-  color: #0a7a28;
+  color: var(--success-color);
 }
 
 .error {
-  color: #a40000;
+  color: var(--error-color);
 }
 
 .pill {
   font-size: 12px;
-  background: #eef0f7;
-  color: #4a4d57;
+  background: var(--pill-bg);
+  color: var(--pill-text);
   border-radius: 999px;
   padding: 2px 8px;
 }
@@ -139,11 +243,12 @@ button:active {
 
 /* File preview list */
 .file-preview {
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 10px;
   max-height: 300px;
   overflow-y: auto;
+  background-color: var(--bg-tertiary);
 }
 
 .file-item {
@@ -151,7 +256,7 @@ button:active {
   justify-content: space-between;
   align-items: center;
   padding: 8px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--border-light);
 }
 
 .file-item:last-child {
@@ -163,28 +268,28 @@ button:active {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--text-color);
 }
 
 .file-size {
-  color: #666;
+  color: var(--text-muted);
   font-size: 0.85rem;
   margin-left: 10px;
   white-space: nowrap;
 }
 
 .file-remove {
-  background: #f44336;
+  background: var(--remove-bg);
   color: white;
   border: none;
-  border-radius: 50%;
-  width: 24px;
-  height: 24px;
-  font-size: 14px;
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 12px;
   cursor: pointer;
   margin-left: 8px;
   flex-shrink: 0;
 }
 
 .file-remove:hover {
-  background: #d32f2f;
+  background: var(--remove-hover);
 }

@@ -5,11 +5,13 @@ A tiny, mobile‑first file uploader for your local network.
 ## Features
 - **Mobile‑first UI**: Drag‑and‑drop or tap‑to‑pick (camera capture attribute enabled on many phones)
 - **File preview**: See selected files with names and sizes before uploading
+- **Cumulative selection**: Add more files to your selection without replacing existing ones
 - **Directory management**: Save to a chosen subdirectory **within a configured root**
-- **Smart memory**: Remembers last used directory via cookie (per browser/device)
+- **Smart memory**: Remembers last used directory via localStorage (persists across sessions)
 - **Directory browser**: Server‑side browser limited to the configured root
 - **Path security**: Prevents directory traversal attacks
 - **Multi‑file support**: Upload single or multiple files at once
+- **Dark mode**: Automatically follows system theme preference
 - **Flexible config**: Environment variables, config file, or hardcoded defaults
 - **Health check**: `/healthz` endpoint for monitoring
 

@@ -63,6 +63,13 @@ const clearFilesBtn = document.getElementById('clear_files');
 
 let currentPath = (targetInput.value || "").replace(/^\/+|\/+$/g, "");
 
+// Load last directory from localStorage on page load
+const savedDir = localStorage.getItem('last_dir');
+if (savedDir) {
+  targetInput.value = savedDir;
+  currentPath = savedDir.replace(/^\/+|\/+$/g, "");
+}
+
 function setStatus(msg, cls="muted") {
   statusEl.className = "center " + cls; statusEl.textContent = msg;
 }
@@ -182,6 +189,8 @@ browseBtn.addEventListener('click', async () => {
 });
 useFolderBtn.addEventListener('click', () => {
   targetInput.value = currentPath;
+  // Save to localStorage when folder is selected
+  localStorage.setItem('last_dir', currentPath);
   browser.classList.add('hidden');
 });
 
@@ -241,6 +250,10 @@ upBtn.addEventListener('click', async () => {
     const data = await r.json();
     const count = data.saved.length;
     setStatus(`✅ Uploaded ${count} file(s) to /${data.target_dir || ""}`, "success");
+
+    // Save last directory to localStorage
+    localStorage.setItem('last_dir', data.target_dir || "");
+
     // Clear selection and preview
     fi.value = '';
     storedFiles = [];

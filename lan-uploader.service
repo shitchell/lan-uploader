@@ -1,0 +1,35 @@
+[Unit]
+Description=LAN Uploader - Mobile-first file uploader for local networks
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/lan-uploader
+
+# Environment variables (uncomment and modify as needed)
+# Environment="UPLOAD_ROOT=/var/uploads"
+# Environment="MAX_CONTENT_LENGTH_MB=2048"
+# Environment="PORT=8080"
+# Environment="HOST=0.0.0.0"
+
+# Or use an environment file instead
+# EnvironmentFile=/opt/lan-uploader/.env
+
+# Start the application
+ExecStart=/opt/lan-uploader/.venv/bin/python app.py
+
+# Restart policy
+Restart=on-failure
+RestartSec=5s
+
+# Security hardening (optional but recommended)
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/uploads
+
+[Install]
+WantedBy=multi-user.target

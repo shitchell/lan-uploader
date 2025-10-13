@@ -81,31 +81,30 @@ HOST = 0.0.0.0
 See `.lanuploaderc.example` for a template.
 
 ## Systemd (optional)
-Create `/etc/systemd/system/lan-uploader.service`:
-```
-[Unit]
-Description=LAN Uploader (Flask)
-After=network.target
 
-[Service]
-Type=simple
-User=www-data
-Group=www-data
-WorkingDirectory=/opt/lan-uploader
-Environment=UPLOAD_ROOT=/var/mywebapp/uploads
-Environment=PORT=8080
-Environment=MAX_CONTENT_LENGTH_MB=2048
-ExecStart=/opt/lan-uploader/.venv/bin/python app.py
-Restart=on-failure
+A systemd service file is included in the repository: `lan-uploader.service`
 
-[Install]
-WantedBy=multi-user.target
-```
-Enable:
+To install:
 ```bash
+# Copy the service file
+sudo cp lan-uploader.service /etc/systemd/system/
+
+# Edit environment variables as needed
+sudo nano /etc/systemd/system/lan-uploader.service
+
+# Enable and start
 sudo systemctl daemon-reload
 sudo systemctl enable --now lan-uploader
+
+# Check status
+sudo systemctl status lan-uploader
 ```
+
+The service file includes:
+- Example environment variable configuration (commented out)
+- Working directory setup
+- Auto-restart on failure
+- Security hardening options
 
 ## Notes
 - Camera capture: `<input capture>` is enabled; some mobile browsers require `accept="image/*"` to auto‑open camera. This app sets `capture` and allows any file. If you want camera‑only, change `accept` to `image/*` or `video/*` in `templates/upload.html`.

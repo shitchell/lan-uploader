@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Background circle -->
+  <circle cx="50" cy="50" r="48" fill="#2d7ef7" stroke="#1e6de5" stroke-width="2"/>
+
+  <!-- Upload arrow -->
+  <path d="M 50 25 L 35 40 L 43 40 L 43 60 L 57 60 L 57 40 L 65 40 Z" fill="white"/>
+
+  <!-- Base line -->
+  <rect x="30" y="65" width="40" height="6" rx="3" fill="white"/>
+</svg>

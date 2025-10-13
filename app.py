@@ -1,12 +1,43 @@
 #!/usr/bin/env python3
 import os
 from pathlib import Path
-from flask import Flask, request, render_template, jsonify, make_response, send_from_directory, abort
+from configparser import ConfigParser
+from flask import Flask, request, render_template, jsonify, make_response, abort
 from werkzeug.utils import secure_filename
 
-# ---- Configuration ----
-UPLOAD_ROOT = Path(os.environ.get("UPLOAD_ROOT", "./uploads")).resolve()
-MAX_CONTENT_LENGTH = int(os.environ.get("MAX_CONTENT_LENGTH_MB", "1024")) * 1024 * 1024  # MB -> bytes
+# ---- Configuration Loading ----
+# Priority: 1) Environment variables, 2) Config file, 3) Hardcoded defaults
+
+def load_config():
+    """Load configuration with priority: env vars > config file > defaults."""
+    # Defaults
+    config = {
+        "UPLOAD_ROOT": "./uploads",
+        "MAX_CONTENT_LENGTH_MB": "1024",
+        "PORT": "8080",
+    }
+
+    # Read from config file if it exists
+    config_path = Path.home() / ".lanuploaderc"
+    if config_path.exists():
+        parser = ConfigParser()
+        parser.read(config_path)
+        if "lanuploader" in parser:
+            for key in config.keys():
+                if key in parser["lanuploader"]:
+                    config[key] = parser["lanuploader"][key]
+
+    # Override with environment variables
+    for key in config.keys():
+        if key in os.environ:
+            config[key] = os.environ[key]
+
+    return config
+
+config = load_config()
+UPLOAD_ROOT = Path(config["UPLOAD_ROOT"]).resolve()
+MAX_CONTENT_LENGTH = int(config["MAX_CONTENT_LENGTH_MB"]) * 1024 * 1024  # MB -> bytes
+PORT = int(config["PORT"])
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT_LENGTH
@@ -14,17 +45,33 @@ app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT_LENGTH
 # Ensure root exists
 UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
 
+# ---- Security Functions ----
+# All path operations use these functions to prevent directory traversal attacks
+
 def within_root(p: Path) -> bool:
-    """Return True if path p is inside UPLOAD_ROOT."""
+    """
+    Check if a path is inside UPLOAD_ROOT.
+
+    This prevents path traversal attacks (e.g., ../../etc/passwd).
+    Returns True only if the resolved path is a child of UPLOAD_ROOT.
+    """
     try:
         p.resolve().relative_to(UPLOAD_ROOT)
         return True
-    except Exception:
+    except (ValueError, RuntimeError):
+        # ValueError: path is not relative to UPLOAD_ROOT
+        # RuntimeError: symlink loop or other path resolution error
         return False
 
 def safe_target_dir(subpath: str) -> Path:
-    """Sanitize/resolve a user-provided subpath within UPLOAD_ROOT."""
-    # Normalize and remove leading slashes to keep it relative
+    """
+    Sanitize and validate a user-provided subpath within UPLOAD_ROOT.
+
+    Normalizes the path, resolves it, verifies it's within UPLOAD_ROOT,
+    and creates it if it doesn't exist. Returns the validated Path object.
+
+    Raises 400 error if path attempts to escape UPLOAD_ROOT.
+    """
     subpath = (subpath or "").strip().strip("/")
     target = (UPLOAD_ROOT / subpath).resolve()
     if not within_root(target):
@@ -34,14 +81,26 @@ def safe_target_dir(subpath: str) -> Path:
 
 @app.route("/", methods=["GET"])
 def index():
+    """
+    Serve the main upload page.
+
+    Reads the 'last_dir' cookie to prefill the directory input field,
+    providing a better UX by remembering the user's last upload location.
+    """
     last_dir = request.cookies.get("last_dir", "")
-    # Ensure the cookie path is safe-ish for prefill (don't create/resolve here)
+    # Sanitize cookie value for display (validation happens on upload)
     last_dir = last_dir.strip().strip("/")
     return render_template("upload.html", last_dir=last_dir)
 
 @app.route("/upload", methods=["POST"])
 def upload():
-    # Choose target dir (relative to root)
+    """
+    Handle file uploads.
+
+    Accepts single or multiple files via form data, validates the target
+    directory, saves files with secure filenames, and returns upload results.
+    Sets a cookie to remember the upload directory for future uploads.
+    """
     target_dir = request.form.get("target_dir", "").strip().strip("/")
     target = safe_target_dir(target_dir)
 
@@ -70,7 +129,7 @@ def upload():
         })
 
     resp = make_response(jsonify({"ok": True, "saved": saved, "target_dir": target_dir}))
-    # Remember last dir for 30 days
+    # Remember last dir for 30 days (samesite=Lax prevents CSRF)
     resp.set_cookie("last_dir", target_dir, max_age=60*60*24*30, samesite="Lax")
     return resp
 
@@ -113,8 +172,14 @@ def list_dirs():
 
 @app.route("/healthz")
 def healthz():
+    """
+    Health check endpoint.
+
+    Returns a simple JSON response indicating the service is running
+    and shows the configured upload root directory.
+    """
     return {"ok": True, "root": str(UPLOAD_ROOT)}, 200
 
 if __name__ == "__main__":
     # Bind on all interfaces for LAN access
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", "8080")), debug=True)
+    app.run(host="0.0.0.0", port=PORT, debug=True)

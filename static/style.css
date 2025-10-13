@@ -1,0 +1,190 @@
+:root {
+  --pad: 14px;
+}
+
+body {
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  margin: 0;
+  padding: var(--pad);
+  max-width: 720px;
+  margin-inline: auto;
+}
+
+header {
+  text-align: center;
+  margin-bottom: 10px;
+}
+
+h1 {
+  font-size: 1.2rem;
+  margin: 0;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+input[type="text"] {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #ccc;
+  border-radius: 10px;
+  font-size: 16px;
+}
+
+button, .btn {
+  padding: 12px 14px;
+  font-size: 16px;
+  border: none;
+  background: #2d7ef7;
+  color: white;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+button:active {
+  filter: brightness(0.93);
+}
+
+.muted {
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.dropzone {
+  border: 2px dashed #999;
+  border-radius: 16px;
+  padding: 24px;
+  text-align: center;
+  color: #555;
+  user-select: none;
+}
+
+.dropzone.dragover {
+  background: #f4f7ff;
+  border-color: #2d7ef7;
+  color: #2d7ef7;
+}
+
+.hidden {
+  display: none;
+}
+
+.dirbrowser {
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  padding: 10px;
+}
+
+.crumbs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.crumbs a {
+  text-decoration: none;
+  background: #f2f2f2;
+  padding: 4px 8px;
+  border-radius: 999px;
+  color: #333;
+}
+
+.dirlist {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.dir {
+  padding: 10px;
+  border: 1px solid #eee;
+  border-radius: 10px;
+  background: #fafafa;
+  cursor: pointer;
+}
+
+.dir:active {
+  filter: brightness(0.95);
+}
+
+.success {
+  color: #0a7a28;
+}
+
+.error {
+  color: #a40000;
+}
+
+.pill {
+  font-size: 12px;
+  background: #eef0f7;
+  color: #4a4d57;
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.center {
+  text-align: center;
+}
+
+/* File preview list */
+.file-preview {
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  padding: 10px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.file-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px;
+  border-bottom: 1px solid #eee;
+}
+
+.file-item:last-child {
+  border-bottom: none;
+}
+
+.file-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-size {
+  color: #666;
+  font-size: 0.85rem;
+  margin-left: 10px;
+  white-space: nowrap;
+}
+
+.file-remove {
+  background: #f44336;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  font-size: 14px;
+  cursor: pointer;
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+
+.file-remove:hover {
+  background: #d32f2f;
+}

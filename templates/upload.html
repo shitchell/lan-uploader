@@ -4,33 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>LAN Uploader</title>
-  <style>
-    :root { --pad: 14px; }
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji"; margin: 0; padding: var(--pad); max-width: 720px; margin-inline: auto; }
-    header { text-align: center; margin-bottom: 10px; }
-    h1 { font-size: 1.2rem; margin: 0; }
-    .row { display: flex; gap: 8px; align-items: center; }
-    .stack { display: flex; flex-direction: column; gap: 10px; }
-    input[type="text"] { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 10px; font-size: 16px; }
-    button, .btn { padding: 12px 14px; font-size: 16px; border: none; background: #2d7ef7; color: white; border-radius: 10px; }
-    button:active { filter: brightness(0.93); }
-    .muted { color: #666; font-size: 0.9rem; }
-    .dropzone {
-      border: 2px dashed #999; border-radius: 16px; padding: 24px; text-align: center; color: #555; user-select: none;
-    }
-    .dropzone.dragover { background: #f4f7ff; border-color: #2d7ef7; color: #2d7ef7; }
-    .hidden { display: none; }
-    .dirbrowser { border: 1px solid #ddd; border-radius: 12px; padding: 10px; }
-    .crumbs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
-    .crumbs a { text-decoration: none; background: #f2f2f2; padding: 4px 8px; border-radius: 999px; color: #333; }
-    .dirlist { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    .dir { padding: 10px; border: 1px solid #eee; border-radius: 10px; background: #fafafa; cursor: pointer; }
-    .dir:active { filter: brightness(0.95); }
-    .success { color: #0a7a28; }
-    .error { color: #a40000; }
-    .pill { font-size: 12px; background: #eef0f7; color: #4a4d57; border-radius: 999px; padding: 2px 8px; }
-    .center { text-align: center; }
-  </style>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
   <header>
@@ -60,6 +34,14 @@
       <div class="muted">Camera capture supported on many phones</div>
     </div>
 
+    <div id="file_preview" class="file-preview hidden">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <strong>Selected Files</strong>
+        <button id="clear_files" type="button" style="background: #666; font-size: 14px; padding: 6px 10px;">Clear All</button>
+      </div>
+      <div id="file_list"></div>
+    </div>
+
     <button id="upload_btn" type="button">Upload</button>
     <div id="status" class="center muted"></div>
   </div>
@@ -75,6 +57,9 @@ const browser = document.getElementById('browser');
 const crumbs = document.getElementById('crumbs');
 const dirlist = document.getElementById('dirlist');
 const useFolderBtn = document.getElementById('use_folder');
+const filePreview = document.getElementById('file_preview');
+const fileList = document.getElementById('file_list');
+const clearFilesBtn = document.getElementById('clear_files');
 
 let currentPath = (targetInput.value || "").replace(/^\/+|\/+$/g, "");
 
@@ -82,13 +67,75 @@ function setStatus(msg, cls="muted") {
   statusEl.className = "center " + cls; statusEl.textContent = msg;
 }
 
+function formatFileSize(bytes) {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+function updateFilePreview() {
+  if (!fi.files || fi.files.length === 0) {
+    filePreview.classList.add('hidden');
+    setStatus('');
+    return;
+  }
+
+  filePreview.classList.remove('hidden');
+  fileList.innerHTML = '';
+
+  Array.from(fi.files).forEach((file, index) => {
+    const item = document.createElement('div');
+    item.className = 'file-item';
+
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'file-name';
+    nameSpan.textContent = file.name;
+    nameSpan.title = file.name;
+
+    const sizeSpan = document.createElement('span');
+    sizeSpan.className = 'file-size';
+    sizeSpan.textContent = formatFileSize(file.size);
+
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'file-remove';
+    removeBtn.textContent = '×';
+    removeBtn.title = 'Remove file';
+    removeBtn.addEventListener('click', () => removeFile(index));
+
+    item.appendChild(nameSpan);
+    item.appendChild(sizeSpan);
+    item.appendChild(removeBtn);
+    fileList.appendChild(item);
+  });
+
+  setStatus(`${fi.files.length} file(s) ready to upload.`);
+}
+
+function removeFile(index) {
+  const dt = new DataTransfer();
+  Array.from(fi.files).forEach((file, i) => {
+    if (i !== index) dt.items.add(file);
+  });
+  fi.files = dt.files;
+  updateFilePreview();
+}
+
+clearFilesBtn.addEventListener('click', () => {
+  fi.value = '';
+  updateFilePreview();
+});
+
+fi.addEventListener('change', updateFilePreview);
+
 dz.addEventListener('click', () => fi.click());
 dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
 dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
 dz.addEventListener('drop', e => {
   e.preventDefault(); dz.classList.remove('dragover');
   fi.files = e.dataTransfer.files;
-  setStatus(`${fi.files.length} file(s) queued.`);
+  updateFilePreview();
 });
 
 browseBtn.addEventListener('click', async () => {
@@ -158,8 +205,9 @@ upBtn.addEventListener('click', async () => {
     const data = await r.json();
     const count = data.saved.length;
     setStatus(`✅ Uploaded ${count} file(s) to /${data.target_dir || ""}`, "success");
-    // Clear selection
+    // Clear selection and preview
     fi.value = '';
+    updateFilePreview();
   } catch (e) {
     setStatus("Upload failed: " + e.message, "error");
   }

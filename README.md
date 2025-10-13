@@ -3,13 +3,15 @@
 A tiny, mobile‑first file uploader for your local network.
 
 ## Features
-- Drag‑and‑drop or tap‑to‑pick (mobile friendly; camera capture attribute enabled on many phones)
-- Save to a chosen subdirectory **within a configured root**
-- Remembers last used directory via cookie (per browser/device)
-- Directory browser (server‑side) limited to the configured root
-- Safe path handling (prevents path traversal)
-- Single file or multi‑file uploads
-- Health check endpoint: `/healthz`
+- **Mobile‑first UI**: Drag‑and‑drop or tap‑to‑pick (camera capture attribute enabled on many phones)
+- **File preview**: See selected files with names and sizes before uploading
+- **Directory management**: Save to a chosen subdirectory **within a configured root**
+- **Smart memory**: Remembers last used directory via cookie (per browser/device)
+- **Directory browser**: Server‑side browser limited to the configured root
+- **Path security**: Prevents directory traversal attacks
+- **Multi‑file support**: Upload single or multiple files at once
+- **Flexible config**: Environment variables, config file, or hardcoded defaults
+- **Health check**: `/healthz` endpoint for monitoring
 
 ## Quick start
 ```bash
@@ -27,9 +29,27 @@ http://<server-ip>:8080
 ```
 
 ## Configuration
-- `UPLOAD_ROOT` (env): absolute or relative path to the root directory for uploads (default: `./uploads`)
-- `MAX_CONTENT_LENGTH_MB` (env): max request size in megabytes (default: `1024` = 1GB)
-- `PORT` (env): HTTP port (default: 8080)
+
+Configuration is loaded in this priority order:
+1. **Environment variables** (highest priority)
+2. **Config file** at `~/.lanuploaderc`
+3. **Hardcoded defaults** (lowest priority)
+
+### Available Options
+- `UPLOAD_ROOT`: absolute or relative path to the root directory for uploads (default: `./uploads`)
+- `MAX_CONTENT_LENGTH_MB`: max request size in megabytes (default: `1024` = 1GB)
+- `PORT`: HTTP port (default: `8080`)
+
+### Config File Format
+Create `~/.lanuploaderc` with INI format:
+```ini
+[lanuploader]
+UPLOAD_ROOT = /var/mywebapp/uploads
+MAX_CONTENT_LENGTH_MB = 2048
+PORT = 8080
+```
+
+See `.lanuploaderc.example` for a template.
 
 ## Systemd (optional)
 Create `/etc/systemd/system/lan-uploader.service`:

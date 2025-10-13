@@ -19,10 +19,13 @@ A tiny, mobile‑first file uploader for your local network.
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install flask
-export UPLOAD_ROOT="$PWD/uploads"   # or /var/mywebapp/uploads
-export PORT=8080
+pip install -r requirements.txt
 python app.py
+```
+
+Or with custom settings:
+```bash
+python app.py --upload-root /var/mywebapp/uploads --port 8080 --max-size 2048
 ```
 
 Then visit from phone/desktop on same LAN:
@@ -33,14 +36,34 @@ http://<server-ip>:8080
 ## Configuration
 
 Configuration is loaded in this priority order:
-1. **Environment variables** (highest priority)
-2. **Config file** at `~/.lanuploaderc`
-3. **Hardcoded defaults** (lowest priority)
+1. **Command line arguments** (highest priority)
+2. **Environment variables**
+3. **Config file** at `~/.lanuploaderc`
+4. **Hardcoded defaults** (lowest priority)
 
 ### Available Options
 - `UPLOAD_ROOT`: absolute or relative path to the root directory for uploads (default: `./uploads`)
-- `MAX_CONTENT_LENGTH_MB`: max request size in megabytes (default: `1024` = 1GB)
+- `MAX_CONTENT_LENGTH_MB` / `max-size`: max request size in megabytes (default: `1024` = 1GB)
 - `PORT`: HTTP port (default: `8080`)
+
+### Command Line Arguments
+```bash
+python app.py --help
+python app.py --upload-root /path/to/uploads --port 8080 --max-size 2048
+```
+
+Options:
+- `--upload-root PATH`: Upload root directory
+- `--port PORT`: Server port
+- `--max-size MB`: Maximum upload size in megabytes
+
+### Environment Variables
+```bash
+export UPLOAD_ROOT="/var/mywebapp/uploads"
+export PORT=8080
+export MAX_CONTENT_LENGTH_MB=2048
+python app.py
+```
 
 ### Config File Format
 Create `~/.lanuploaderc` with INI format:

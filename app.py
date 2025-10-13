@@ -1,15 +1,38 @@
 #!/usr/bin/env python3
 import os
+import argparse
 from pathlib import Path
 from configparser import ConfigParser
 from flask import Flask, request, render_template, jsonify, make_response, abort
 from werkzeug.utils import secure_filename
 
 # ---- Configuration Loading ----
-# Priority: 1) Environment variables, 2) Config file, 3) Hardcoded defaults
+# Priority: 1) Command line args, 2) Environment variables, 3) Config file, 4) Hardcoded defaults
 
-def load_config():
-    """Load configuration with priority: env vars > config file > defaults."""
+def parse_args():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(
+        description="LAN Uploader - A tiny, mobile-first file uploader for your local network"
+    )
+    parser.add_argument(
+        "--upload-root",
+        type=str,
+        help="Upload root directory (default: ./uploads)",
+    )
+    parser.add_argument(
+        "--max-size",
+        type=int,
+        help="Maximum upload size in MB (default: 1024)",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        help="Server port (default: 8080)",
+    )
+    return parser.parse_args()
+
+def load_config(args=None):
+    """Load configuration with priority: CLI args > env vars > config file > defaults."""
     # Defaults
     config = {
         "UPLOAD_ROOT": "./uploads",
@@ -32,9 +55,19 @@ def load_config():
         if key in os.environ:
             config[key] = os.environ[key]
 
+    # Override with command line arguments (highest priority)
+    if args:
+        if args.upload_root is not None:
+            config["UPLOAD_ROOT"] = args.upload_root
+        if args.max_size is not None:
+            config["MAX_CONTENT_LENGTH_MB"] = str(args.max_size)
+        if args.port is not None:
+            config["PORT"] = str(args.port)
+
     return config
 
-config = load_config()
+args = parse_args()
+config = load_config(args)
 UPLOAD_ROOT = Path(config["UPLOAD_ROOT"]).resolve()
 MAX_CONTENT_LENGTH = int(config["MAX_CONTENT_LENGTH_MB"]) * 1024 * 1024  # MB -> bytes
 PORT = int(config["PORT"])

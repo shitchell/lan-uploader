@@ -11,6 +11,9 @@ const useFolderBtn = document.getElementById('use_folder');
 const filePreview = document.getElementById('file_preview');
 const fileList = document.getElementById('file_list');
 const clearFilesBtn = document.getElementById('clear_files');
+const progressContainer = document.getElementById('progress_container');
+const progressBar = document.getElementById('progress_bar');
+const progressText = document.getElementById('progress_text');
 
 let currentPath = (targetInput.value || "").replace(/^\/+|\/+$/g, "");
 
@@ -183,33 +186,74 @@ async function refreshDir(relpath) {
   });
 }
 
-upBtn.addEventListener('click', async () => {
+upBtn.addEventListener('click', () => {
   if (!fi.files || fi.files.length === 0) {
     // On mobile, if no files selected, trigger picker
     fi.click();
     setStatus("Choose files to upload.");
     return;
   }
+
   const form = new FormData();
   for (const f of fi.files) form.append('files', f);
   form.append('target_dir', targetInput.value || "");
 
-  setStatus("Uploading…");
-  try {
-    const r = await fetch('/upload', { method: 'POST', body: form });
-    if (!r.ok) throw new Error(await r.text());
-    const data = await r.json();
-    const count = data.saved.length;
-    setStatus(`✅ Uploaded ${count} file(s) to /${data.target_dir || ""}`, "success");
+  // Show progress bar and hide status
+  progressContainer.classList.remove('hidden');
+  statusEl.textContent = '';
+  progressBar.style.width = '0%';
+  progressText.textContent = '0%';
 
-    // Save last directory to localStorage
-    localStorage.setItem('last_dir', data.target_dir || "");
+  const xhr = new XMLHttpRequest();
 
-    // Clear selection and preview
-    fi.value = '';
-    storedFiles = [];
-    updateFilePreview();
-  } catch (e) {
-    setStatus("Upload failed: " + e.message, "error");
-  }
+  // Track upload progress
+  xhr.upload.addEventListener('progress', (e) => {
+    if (e.lengthComputable) {
+      const percentComplete = Math.round((e.loaded / e.total) * 100);
+      progressBar.style.width = percentComplete + '%';
+      progressText.textContent = percentComplete + '%';
+    }
+  });
+
+  // Handle completion
+  xhr.addEventListener('load', () => {
+    progressContainer.classList.add('hidden');
+
+    if (xhr.status >= 200 && xhr.status < 300) {
+      try {
+        const data = JSON.parse(xhr.responseText);
+        const count = data.saved.length;
+        setStatus(`✅ Uploaded ${count} file(s) to /${data.target_dir || ""}`, "success");
+
+        // Save last directory to localStorage
+        localStorage.setItem('last_dir', data.target_dir || "");
+
+        // Clear selection and preview after a brief delay so user sees success
+        setTimeout(() => {
+          fi.value = '';
+          storedFiles = [];
+          updateFilePreview();
+        }, 2000);
+      } catch (e) {
+        setStatus("Upload succeeded but response parsing failed", "error");
+      }
+    } else {
+      setStatus("Upload failed: " + (xhr.statusText || "Unknown error"), "error");
+    }
+  });
+
+  // Handle errors
+  xhr.addEventListener('error', () => {
+    progressContainer.classList.add('hidden');
+    setStatus("Upload failed: Network error", "error");
+  });
+
+  xhr.addEventListener('abort', () => {
+    progressContainer.classList.add('hidden');
+    setStatus("Upload cancelled", "error");
+  });
+
+  // Send the request
+  xhr.open('POST', '/upload');
+  xhr.send(form);
 });

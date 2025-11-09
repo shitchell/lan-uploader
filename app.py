@@ -10,11 +10,16 @@ from typing import Optional, List, Dict, Any, Tuple, Union
 from argparse import Namespace
 
 import aiofiles
-from fastapi import FastAPI, UploadFile, File, Form, Query, Request, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, Query, Request, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from werkzeug.utils import secure_filename
+from dataclasses import dataclass, field
+from enum import Enum
+import uuid
+import json
+import asyncio
 
 from models import DatabaseManager, FileIndex
 from thumbnails import ThumbnailGenerator
@@ -170,6 +175,294 @@ def get_preview_type(extension: str) -> Tuple[Optional[str], Optional[str]]:
         if extension in info['extensions']:
             return preview_type, str(info['method'])
     return None, None
+
+# ---- WebSocket Infrastructure ----
+
+class UploadStatus(Enum):
+    """Upload session status."""
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+@dataclass
+class UploadSession:
+    """Represents an upload session."""
+    id: str
+    status: UploadStatus = UploadStatus.PENDING
+    total_files: int = 0
+    files_completed: int = 0
+    total_bytes: int = 0
+    bytes_written: int = 0
+    files_saved: List[Dict[str, Any]] = field(default_factory=list)
+    errors: List[Dict[str, Any]] = field(default_factory=list)
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    error_message: Optional[str] = None
+
+
+class UploadSessionManager:
+    """
+    Manages upload sessions and WebSocket connections.
+
+    Responsibilities:
+        - Track active upload sessions
+        - Manage WebSocket connections
+        - Broadcast progress updates
+        - Handle session lifecycle
+    """
+
+    def __init__(self) -> None:
+        """Initialize the upload session manager."""
+        self.sessions: Dict[str, UploadSession] = {}
+        self.connections: Dict[str, WebSocket] = {}
+        self._lock = asyncio.Lock()
+
+    def register_connection(self, session_id: str, websocket: WebSocket) -> None:
+        """
+        Register a WebSocket connection for a session.
+
+        Args:
+            session_id: Unique session identifier
+            websocket: WebSocket connection to register
+        """
+        self.connections[session_id] = websocket
+        self.sessions[session_id] = UploadSession(id=session_id)
+
+    def unregister_connection(self, session_id: str) -> None:
+        """
+        Unregister a WebSocket connection.
+
+        Args:
+            session_id: Session identifier to unregister
+        """
+        if session_id in self.connections:
+            del self.connections[session_id]
+
+        # Keep session data for a while for potential reconnects
+        # Clean up old sessions after 1 hour
+        asyncio.create_task(self._cleanup_session(session_id, delay=3600))
+
+    async def _cleanup_session(self, session_id: str, delay: int) -> None:
+        """
+        Clean up session after delay.
+
+        Args:
+            session_id: Session to clean up
+            delay: Delay in seconds before cleanup
+        """
+        await asyncio.sleep(delay)
+        async with self._lock:
+            if session_id in self.sessions:
+                session = self.sessions[session_id]
+                if session.status in (UploadStatus.COMPLETED, UploadStatus.FAILED, UploadStatus.CANCELLED):
+                    del self.sessions[session_id]
+
+    def get_session(self, session_id: str) -> Optional[UploadSession]:
+        """
+        Get session by ID.
+
+        Args:
+            session_id: Session identifier
+
+        Returns:
+            UploadSession if found, None otherwise
+        """
+        return self.sessions.get(session_id)
+
+    async def start_upload(
+        self,
+        session_id: str,
+        total_files: int,
+        total_bytes: int = 0
+    ) -> None:
+        """
+        Mark upload as started.
+
+        Args:
+            session_id: Session identifier
+            total_files: Total number of files to upload
+            total_bytes: Total bytes to upload (optional)
+        """
+        async with self._lock:
+            if session_id in self.sessions:
+                session = self.sessions[session_id]
+                session.status = UploadStatus.IN_PROGRESS
+                session.total_files = total_files
+                session.total_bytes = total_bytes
+                session.started_at = datetime.now()
+
+        await self.send_message(session_id, {
+            "type": "upload_started",
+            "total_files": total_files,
+            "total_bytes": total_bytes
+        })
+
+    async def update_progress(
+        self,
+        session_id: str,
+        files_completed: int,
+        bytes_written: int
+    ) -> None:
+        """
+        Update upload progress.
+
+        Args:
+            session_id: Session identifier
+            files_completed: Number of files completed so far
+            bytes_written: Number of bytes written so far
+        """
+        async with self._lock:
+            if session_id not in self.sessions:
+                return
+
+            session = self.sessions[session_id]
+            session.files_completed = files_completed
+            session.bytes_written = bytes_written
+
+            # Calculate percentage
+            if session.total_files > 0:
+                percent = int((files_completed / session.total_files) * 100)
+            else:
+                percent = 0
+
+        await self.send_message(session_id, {
+            "type": "progress",
+            "percent": percent,
+            "files_done": files_completed,
+            "total_files": session.total_files,
+            "bytes_written": bytes_written,
+            "total_bytes": session.total_bytes
+        })
+
+    async def file_completed(
+        self,
+        session_id: str,
+        filename: str,
+        size: int,
+        path: str
+    ) -> None:
+        """
+        Notify that a file was completed.
+
+        Args:
+            session_id: Session identifier
+            filename: Name of completed file
+            size: File size in bytes
+            path: Relative path to file
+        """
+        async with self._lock:
+            if session_id in self.sessions:
+                session = self.sessions[session_id]
+                session.files_saved.append({
+                    "name": filename,
+                    "size": size,
+                    "path": path
+                })
+
+        await self.send_message(session_id, {
+            "type": "file_complete",
+            "filename": filename,
+            "size": size,
+            "path": path
+        })
+
+    async def upload_error(
+        self,
+        session_id: str,
+        error_message: str,
+        error_code: int = 500,
+        filename: Optional[str] = None
+    ) -> None:
+        """
+        Report an upload error.
+
+        Args:
+            session_id: Session identifier
+            error_message: Error message
+            error_code: HTTP error code
+            filename: Optional filename that caused the error
+        """
+        async with self._lock:
+            if session_id in self.sessions:
+                session = self.sessions[session_id]
+                session.status = UploadStatus.FAILED
+                session.error_message = error_message
+                session.errors.append({
+                    "file": filename,
+                    "error": error_message,
+                    "code": error_code
+                })
+                session.completed_at = datetime.now()
+
+        await self.send_message(session_id, {
+            "type": "error",
+            "message": error_message,
+            "code": error_code,
+            "filename": filename
+        })
+
+    async def upload_complete(self, session_id: str) -> None:
+        """
+        Mark upload as complete.
+
+        Args:
+            session_id: Session identifier
+        """
+        async with self._lock:
+            if session_id not in self.sessions:
+                return
+
+            session = self.sessions[session_id]
+            session.status = UploadStatus.COMPLETED
+            session.completed_at = datetime.now()
+
+        await self.send_message(session_id, {
+            "type": "complete",
+            "total_files": session.files_completed,
+            "total_bytes": session.bytes_written,
+            "files_saved": session.files_saved,
+            "errors": session.errors
+        })
+
+    async def cancel_upload(self, session_id: str) -> None:
+        """
+        Cancel an upload (future feature).
+
+        Args:
+            session_id: Session identifier
+        """
+        async with self._lock:
+            if session_id in self.sessions:
+                session = self.sessions[session_id]
+                session.status = UploadStatus.CANCELLED
+                session.completed_at = datetime.now()
+
+        await self.send_message(session_id, {
+            "type": "cancelled"
+        })
+
+    async def send_message(self, session_id: str, message: Dict[str, Any]) -> None:
+        """
+        Send a message to a specific session.
+
+        Args:
+            session_id: Session identifier
+            message: Message dictionary to send as JSON
+        """
+        if session_id in self.connections:
+            websocket = self.connections[session_id]
+            try:
+                await websocket.send_json(message)
+            except Exception:
+                # Silently ignore send errors (connection may have closed)
+                pass
+
+
+# Global upload session manager instance
+upload_manager = UploadSessionManager()
 
 # ---- Security Functions ----
 # All path operations use these functions to prevent directory traversal attacks
@@ -711,6 +1004,98 @@ async def get_thumbnail(filepath: str) -> FileResponse:
         raise HTTPException(status_code=500, detail="Failed to generate thumbnail.")
 
     return FileResponse(thumbnail_path, media_type='image/jpeg')
+
+@app.websocket("/api/upload/ws")
+async def upload_websocket(websocket: WebSocket) -> None:
+    """
+    WebSocket endpoint for real-time upload progress and status updates.
+
+    Protocol:
+        Client -> Server:
+            - (implicit connection = request session)
+            - { "type": "ping" } - Keepalive ping
+
+        Server -> Client:
+            - { "type": "session_id", "id": "uuid" } - Session initialization
+            - { "type": "upload_started", "total_files": N, "total_bytes": N }
+            - { "type": "progress", "percent": N, "files_done": N, "total_files": N, ... }
+            - { "type": "file_complete", "filename": "...", "size": N, "path": "..." }
+            - { "type": "error", "message": "...", "code": N, "filename": "..." }
+            - { "type": "complete", "total_files": N, "total_bytes": N, ... }
+            - { "type": "pong" } - Keepalive response
+    """
+    await websocket.accept()
+
+    # Generate session ID
+    session_id = str(uuid.uuid4())
+
+    # Register connection
+    upload_manager.register_connection(session_id, websocket)
+
+    try:
+        # Send session ID to client
+        await websocket.send_json({
+            "type": "session_id",
+            "id": session_id
+        })
+
+        # Keep connection alive and listen for messages
+        while True:
+            # Receive messages (client might send cancel, pause, etc. in future)
+            data = await websocket.receive_text()
+            message = json.loads(data)
+
+            # Handle client messages
+            if message.get('type') == 'ping':
+                await websocket.send_json({"type": "pong"})
+            elif message.get('type') == 'cancel':
+                # Future: Handle cancel request
+                await upload_manager.cancel_upload(session_id)
+
+    except WebSocketDisconnect:
+        pass  # Normal disconnection
+    except Exception:
+        pass  # Other errors during WebSocket communication
+    finally:
+        # Cleanup
+        upload_manager.unregister_connection(session_id)
+
+
+@app.get("/api/upload/status/{session_id}", tags=["Upload"])
+async def get_upload_status(session_id: str) -> Dict[str, Any]:
+    """
+    Get upload status for a session (polling fallback if WebSocket unavailable).
+
+    Args:
+        session_id: Session identifier
+
+    Returns:
+        Session status with progress information
+    """
+    session = upload_manager.get_session(session_id)
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Calculate progress percentage
+    if session.total_files > 0:
+        percent = int((session.files_completed / session.total_files) * 100)
+    else:
+        percent = 0
+
+    return {
+        "session_id": session.id,
+        "status": session.status.value,
+        "total_files": session.total_files,
+        "files_completed": session.files_completed,
+        "total_bytes": session.total_bytes,
+        "bytes_written": session.bytes_written,
+        "percent": percent,
+        "started_at": session.started_at.isoformat() if session.started_at else None,
+        "completed_at": session.completed_at.isoformat() if session.completed_at else None,
+        "errors": session.errors
+    }
+
 
 @app.get("/healthz", tags=["Health"])
 async def healthz() -> Dict[str, Any]:

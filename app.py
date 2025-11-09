@@ -9,6 +9,7 @@ from configparser import ConfigParser
 from typing import Optional, List, Dict, Any, Tuple, Union
 from argparse import Namespace
 
+import aiofiles
 from fastapi import FastAPI, UploadFile, File, Form, Query, Request, HTTPException
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -204,6 +205,65 @@ def safe_target_dir(subpath: str) -> Path:
     target.mkdir(parents=True, exist_ok=True)
     return target
 
+# ---- Streaming Upload Functions ----
+
+def check_disk_space(path: Path) -> Tuple[int, int, int]:
+    """
+    Check disk space for the given path.
+
+    Args:
+        path: Path to check disk space for
+
+    Returns:
+        Tuple of (total_bytes, used_bytes, available_bytes)
+    """
+    stat = os.statvfs(str(path))
+    total = stat.f_blocks * stat.f_frsize
+    available = stat.f_bavail * stat.f_frsize
+    used = total - available
+    return (total, used, available)
+
+
+async def stream_upload_to_file(
+    upload_file: UploadFile,
+    destination: Path,
+    chunk_size: int = 1024 * 1024  # 1MB chunks
+) -> int:
+    """
+    Stream an uploaded file directly to destination without using temp files.
+
+    Reads the upload in chunks and writes them directly to the destination file,
+    avoiding the need for temporary file storage.
+
+    Args:
+        upload_file: The FastAPI UploadFile object to stream
+        destination: Path where the file should be written
+        chunk_size: Size of chunks to read/write (default: 1MB)
+
+    Returns:
+        Total bytes written
+
+    Raises:
+        OSError: If disk is full, permission denied, or other I/O error occurs
+    """
+    bytes_written = 0
+
+    try:
+        async with aiofiles.open(destination, 'wb') as f:
+            while True:
+                chunk = await upload_file.read(chunk_size)
+                if not chunk:
+                    break
+                await f.write(chunk)
+                bytes_written += len(chunk)
+    except Exception as e:
+        # Clean up partial file on any error
+        if destination.exists():
+            destination.unlink()
+        raise
+
+    return bytes_written
+
 # ---- Routes ----
 
 @app.get("/", include_in_schema=False)
@@ -227,7 +287,10 @@ async def upload_files(
     target_dir: str = Form("")
 ) -> JSONResponse:
     """
-    Upload one or more files to a directory.
+    Upload one or more files to a directory with streaming.
+
+    Files are written directly to the upload directory as they arrive,
+    avoiding the use of temporary file storage.
 
     - **files**: List of files to upload
     - **target_dir**: Target directory path (relative to upload root)
@@ -241,51 +304,120 @@ async def upload_files(
     if not files:
         raise HTTPException(status_code=400, detail="No files provided.")
 
+    # Check disk space before starting upload
+    try:
+        _, _, available_bytes = check_disk_space(UPLOAD_ROOT)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to check disk space: {str(e)}"
+        )
+
     saved = []
+    errors = []
+
     for file in files:
         if not file.filename:
             continue
 
         filename = secure_filename(file.filename)
+        if not filename or filename in (".", ".."):
+            errors.append({
+                "file": file.filename,
+                "error": "Invalid filename"
+            })
+            continue
+
         dest = target / filename
 
-        # Save file
-        with open(dest, "wb") as buffer:
-            content = await file.read()
-            buffer.write(content)
+        # Check if file already exists
+        if dest.exists():
+            errors.append({
+                "file": filename,
+                "error": "File already exists"
+            })
+            continue
 
-        # Index the file in the database
-        file_stat = dest.stat()
-        extension = dest.suffix.lower()
-        mime_type, _ = mimetypes.guess_type(str(dest))
-        preview_type, preview_method = get_preview_type(extension)
-        has_thumbnail = preview_type == 'image'
+        try:
+            # Stream file directly to destination
+            bytes_written = await stream_upload_to_file(file, dest)
 
-        filepath_rel = dest.relative_to(UPLOAD_ROOT).as_posix()
-        parent_path_rel = target.relative_to(UPLOAD_ROOT).as_posix()
+            # Index the file in the database
+            file_stat = dest.stat()
+            extension = dest.suffix.lower()
+            mime_type, _ = mimetypes.guess_type(str(dest))
+            preview_type, preview_method = get_preview_type(extension)
+            has_thumbnail = preview_type == 'image'
 
-        db.index_file(
-            filepath=filepath_rel,
-            filename=filename,
-            parent_path=parent_path_rel,
-            size=file_stat.st_size,
-            modified_at=datetime.fromtimestamp(file_stat.st_mtime),
-            extension=extension,
-            mime_type=mime_type,
-            has_thumbnail=has_thumbnail,
-            preview_type=preview_type,
-        )
+            filepath_rel = dest.relative_to(UPLOAD_ROOT).as_posix()
+            parent_path_rel = target.relative_to(UPLOAD_ROOT).as_posix()
 
-        saved.append({
-            "filename": filename,
-            "relative_path": f"/{target_dir}" if target_dir else "/",
-            "bytes": file_stat.st_size,
-        })
+            db.index_file(
+                filepath=filepath_rel,
+                filename=filename,
+                parent_path=parent_path_rel,
+                size=file_stat.st_size,
+                modified_at=datetime.fromtimestamp(file_stat.st_mtime),
+                extension=extension,
+                mime_type=mime_type,
+                has_thumbnail=has_thumbnail,
+                preview_type=preview_type,
+            )
+
+            # Generate thumbnail if image
+            if preview_type == 'image':
+                try:
+                    thumbnail_gen.generate(dest)
+                except Exception as e:
+                    # Thumbnail generation failure is not critical
+                    pass
+
+            saved.append({
+                "filename": filename,
+                "relative_path": f"/{target_dir}" if target_dir else "/",
+                "bytes": bytes_written,
+            })
+
+        except OSError as e:
+            # Handle disk full, permission denied, etc.
+            if dest.exists():
+                dest.unlink()  # Clean up partial file
+
+            error_msg = str(e)
+            if e.errno == 28:  # ENOSPC - No space left on device
+                error_msg = "Disk full"
+                errors.append({
+                    "file": filename,
+                    "error": error_msg
+                })
+                # Stop processing remaining files if disk is full
+                raise HTTPException(
+                    status_code=507,
+                    detail=f"Disk full after {len(saved)} files. {len(files) - len(saved) - len(errors)} files not uploaded."
+                )
+            elif e.errno == 13:  # EACCES - Permission denied
+                error_msg = "Permission denied"
+
+            errors.append({
+                "file": filename,
+                "error": error_msg
+            })
+
+        except Exception as e:
+            # Handle any other errors
+            if dest.exists():
+                dest.unlink()  # Clean up partial file
+            errors.append({
+                "file": filename,
+                "error": str(e)
+            })
 
     response = JSONResponse({
         "ok": True,
         "saved": saved,
-        "target_dir": target_dir
+        "errors": errors,
+        "target_dir": target_dir,
+        "message": f"Uploaded {len(saved)}/{len(files)} files"
     })
     # Remember last dir for 30 days
     response.set_cookie(

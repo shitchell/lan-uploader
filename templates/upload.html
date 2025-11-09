@@ -8,49 +8,108 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-  <header>
-    <h1>📤 LAN Uploader</h1>
-    <div class="muted">Mobile‑first, drag‑and‑drop, remembers your last folder</div>
+  <header class="app-header">
+    <h1>📁 LAN Uploader</h1>
+    <div class="header-actions">
+      <div class="search-container">
+        <input type="text" id="search_input" placeholder="Search files..." class="search-input">
+        <button id="search_btn" class="icon-btn" title="Search">🔍</button>
+      </div>
+      <button id="upload_btn" class="primary-btn" title="Upload files">
+        <span class="btn-icon">⬆</span> Upload
+      </button>
+      <button id="view_toggle_btn" class="icon-btn" title="Toggle view mode">
+        <span id="view_icon">⊞</span>
+      </button>
+    </div>
   </header>
 
-  <div class="stack">
-    <label class="muted" for="target_dir">Save to subdirectory (relative to server root)</label>
-    <div class="row">
-      <input id="target_dir" name="target_dir" type="text" placeholder="e.g. myuser/Documents" value="{{ last_dir }}">
-      <button id="browse_btn" type="button" title="Browse server folders">Browse</button>
-    </div>
+  <nav class="breadcrumbs" id="breadcrumbs">
+    <a href="#" data-path="">Home</a>
+  </nav>
 
-    <div id="browser" class="dirbrowser hidden">
-      <div class="crumbs" id="crumbs"></div>
-      <div class="dirlist" id="dirlist"></div>
-      <div class="row" style="margin-top:8px;">
-        <span class="pill">Tip: Tap folders to drill in. Tap "Use This Folder" to select.</span>
-        <button id="use_folder" type="button" style="margin-left:auto;">Use This Folder</button>
+  <main class="file-browser">
+    <div id="browser_content" class="browser-content list-view">
+      <div id="status_message" class="status-message hidden"></div>
+      <div id="file_grid" class="file-grid"></div>
+      <div id="empty_state" class="empty-state hidden">
+        <div class="empty-icon">📂</div>
+        <p>This folder is empty</p>
+        <button id="upload_here_btn" class="secondary-btn">Upload Files</button>
       </div>
     </div>
+  </main>
 
-    <input id="file_input" class="hidden" type="file" name="files" multiple accept="*/*" capture>
-    <div id="dropzone" class="dropzone">
-      <div><strong>Tap to choose</strong> or <strong>drop files</strong></div>
-      <div class="muted">Camera capture supported on many phones</div>
-    </div>
-
-    <div id="file_preview" class="file-preview hidden">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-        <strong>Selected Files</strong>
-        <button id="clear_files" type="button" style="background: #666; font-size: 14px; padding: 6px 10px;">Clear All</button>
+  <!-- Upload Modal -->
+  <div id="upload_modal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Upload Files</h2>
+        <button id="close_upload_modal" class="close-btn">×</button>
       </div>
-      <div id="file_list"></div>
+      <div class="modal-body">
+        <p class="muted">Uploading to: <strong id="upload_target_path">/</strong></p>
+
+        <input id="file_input" class="hidden" type="file" name="files" multiple accept="*/*" capture>
+
+        <div id="dropzone" class="dropzone">
+          <div class="dropzone-icon">📤</div>
+          <div><strong>Click to choose</strong> or <strong>drag files here</strong></div>
+          <div class="muted">Camera capture supported on mobile</div>
+        </div>
+
+        <div id="file_preview" class="file-preview hidden">
+          <div class="preview-header">
+            <strong>Selected Files (<span id="file_count">0</span>)</strong>
+            <button id="clear_files" class="text-btn">Clear All</button>
+          </div>
+          <div id="file_list" class="file-list"></div>
+        </div>
+
+        <div id="progress_container" class="progress-container hidden">
+          <div id="progress_bar" class="progress-bar"></div>
+          <div id="progress_text" class="progress-text">0%</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="cancel_upload" class="secondary-btn">Cancel</button>
+        <button id="start_upload" class="primary-btn">Upload</button>
+      </div>
     </div>
+  </div>
 
-    <button id="upload_btn" type="button">Upload</button>
-
-    <div id="progress_container" class="progress-container hidden">
-      <div id="progress_bar" class="progress-bar"></div>
-      <div id="progress_text" class="progress-text">0%</div>
+  <!-- Preview Modal -->
+  <div id="preview_modal" class="modal hidden">
+    <div class="modal-content preview-modal-content">
+      <div class="modal-header">
+        <h2 id="preview_filename">File Preview</h2>
+        <button id="close_preview_modal" class="close-btn">×</button>
+      </div>
+      <div class="modal-body preview-body">
+        <div id="preview_content" class="preview-content"></div>
+      </div>
+      <div class="modal-footer">
+        <button id="download_file" class="secondary-btn">Download</button>
+        <button id="delete_file" class="danger-btn">Delete</button>
+      </div>
     </div>
+  </div>
 
-    <div id="status" class="center muted"></div>
+  <!-- Search Results Modal -->
+  <div id="search_modal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Search Results: "<span id="search_query"></span>"</h2>
+        <button id="close_search_modal" class="close-btn">×</button>
+      </div>
+      <div class="modal-body">
+        <div id="search_results" class="search-results"></div>
+        <div id="no_results" class="empty-state hidden">
+          <div class="empty-icon">🔍</div>
+          <p>No files found</p>
+        </div>
+      </div>
+    </div>
   </div>
 
 <script src="{{ url_for('static', filename='js/app.js') }}"></script>

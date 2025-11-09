@@ -3,6 +3,7 @@ let currentPath = '';
 let currentViewMode = localStorage.getItem('view_mode') || 'list'; // list or gallery
 let storedFiles = [];
 let currentPreviewFile = null;
+let uploadWsClient = null; // WebSocket client for upload progress
 
 // ===== DOM Elements =====
 // Header
@@ -317,6 +318,157 @@ function removeFile(index) {
 }
 
 async function performUpload() {
+  if (storedFiles.length === 0) {
+    showStatus('No files selected', 'error');
+    return;
+  }
+
+  // Check WebSocket support
+  if (!UploadWebSocketClient.isSupported()) {
+    console.warn('WebSocket not supported, falling back to legacy upload');
+    await performUploadLegacy();
+    return;
+  }
+
+  try {
+    // Connect to WebSocket
+    showStatus('Connecting...', 'info', 0);
+    uploadWsClient = new UploadWebSocketClient();
+
+    // Register message handlers
+    uploadWsClient.on('upload_started', handleUploadStarted);
+    uploadWsClient.on('progress', handleUploadProgress);
+    uploadWsClient.on('file_complete', handleFileComplete);
+    uploadWsClient.on('error', handleUploadError);
+    uploadWsClient.on('complete', handleUploadComplete);
+
+    // Connect and get session ID
+    const sessionId = await uploadWsClient.connect();
+    console.log('Got session ID:', sessionId);
+
+    // Prepare form data
+    const formData = new FormData();
+    storedFiles.forEach(file => formData.append('files', file));
+    formData.append('target_dir', currentPath);
+    formData.append('session_id', sessionId);
+
+    // Show progress
+    progressContainer.classList.remove('hidden');
+    progressBar.style.width = '0%';
+    progressText.textContent = '0%';
+    hideStatus();
+
+    // Start upload (XHR for upload progress)
+    const xhr = new XMLHttpRequest();
+
+    xhr.upload.addEventListener('progress', (e) => {
+      // This shows bytes sent to server, not processing progress
+      // WebSocket will show actual processing progress
+      if (e.lengthComputable) {
+        const sendPercent = Math.round((e.loaded / e.total) * 100);
+        console.log(`Bytes sent: ${sendPercent}%`);
+      }
+    });
+
+    xhr.addEventListener('load', () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        // Success handled by WebSocket 'complete' event
+        console.log('Upload HTTP request completed');
+      } else {
+        // Error not caught by WebSocket
+        handleUploadError({
+          type: 'error',
+          message: `Upload failed: ${xhr.statusText}`,
+          code: xhr.status
+        });
+      }
+    });
+
+    xhr.addEventListener('error', () => {
+      handleUploadError({
+        type: 'error',
+        message: 'Upload failed: Network error',
+        code: 0
+      });
+    });
+
+    xhr.open('POST', '/upload');
+    xhr.send(formData);
+
+  } catch (error) {
+    console.error('Upload error:', error);
+    showStatus('Upload failed: ' + error.message, 'error');
+    progressContainer.classList.add('hidden');
+
+    // Clean up WebSocket
+    if (uploadWsClient) {
+      uploadWsClient.close();
+      uploadWsClient = null;
+    }
+  }
+}
+
+// WebSocket message handlers
+function handleUploadStarted(data) {
+  console.log('Upload started:', data);
+  showStatus(`Uploading ${data.total_files} file(s)...`, 'info', 0);
+}
+
+function handleUploadProgress(data) {
+  console.log('Progress:', data);
+  progressBar.style.width = data.percent + '%';
+  progressText.textContent = `${data.percent}% (${data.files_done}/${data.total_files} files)`;
+}
+
+function handleFileComplete(data) {
+  console.log('File complete:', data.filename);
+  // Could show a list of completed files here if desired
+}
+
+function handleUploadError(data) {
+  console.error('Upload error:', data);
+
+  // Show error IMMEDIATELY
+  showStatus(
+    `Error: ${data.message}${data.filename ? ` (${data.filename})` : ''}`,
+    'error',
+    0
+  );
+
+  // Hide progress bar
+  progressContainer.classList.add('hidden');
+
+  // Close WebSocket
+  if (uploadWsClient) {
+    uploadWsClient.close();
+    uploadWsClient = null;
+  }
+}
+
+function handleUploadComplete(data) {
+  console.log('Upload complete:', data);
+
+  progressContainer.classList.add('hidden');
+
+  const hasErrors = data.errors && data.errors.length > 0;
+  const message = hasErrors
+    ? `Uploaded ${data.total_files} file(s) with ${data.errors.length} error(s)`
+    : `Uploaded ${data.total_files} file(s) successfully`;
+
+  showStatus(message, hasErrors ? 'warning' : 'success');
+
+  closeUploadModalFn();
+  loadDirectory(currentPath); // Refresh
+
+  // Close WebSocket
+  if (uploadWsClient) {
+    uploadWsClient.close();
+    uploadWsClient = null;
+  }
+}
+
+// Legacy upload (no WebSocket) - fallback for browsers without WebSocket support
+async function performUploadLegacy() {
   if (storedFiles.length === 0) {
     showStatus('No files selected', 'error');
     return;

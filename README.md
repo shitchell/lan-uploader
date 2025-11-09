@@ -11,9 +11,26 @@ A tiny, mobile‑first file uploader for your local network.
 - **Directory browser**: Server‑side browser limited to the configured root
 - **Path security**: Prevents directory traversal attacks
 - **Multi‑file support**: Upload single or multiple files at once
+- **Real-time progress**: WebSocket-based upload progress tracking
+- **Large upload support**: Handles 100GB+ uploads with 1000+ files efficiently
+- **Immediate error feedback**: Error notifications appear during upload, not after
+- **Streaming uploads**: Files write directly to destination (no /tmp buffering)
 - **Dark mode**: Automatically follows system theme preference
 - **Flexible config**: Environment variables, config file, or hardcoded defaults
 - **Health check**: `/healthz` endpoint for monitoring
+
+## WebSocket Upload System
+
+The upload system provides real-time progress tracking and immediate error feedback through WebSocket connections:
+
+- **Streaming writes**: Files are written directly to their final destination as data arrives (no /tmp buffering)
+- **Real-time progress**: See actual server-side processing progress, not just bytes sent from browser
+- **Immediate errors**: Error notifications appear within 1 second of occurrence, not after upload completes
+- **Tested at scale**: Handles 100GB+ uploads with 1000+ files efficiently
+- **Browser compatible**: Automatic fallback for browsers without WebSocket support
+- **No configuration needed**: WebSocket uploads work out-of-the-box
+
+See [WebSocket Uploads Documentation](docs/websocket-uploads.md) for technical details and troubleshooting.
 
 ## Quick start
 ```bash

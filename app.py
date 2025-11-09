@@ -2,11 +2,18 @@
 import os
 import argparse
 import mimetypes
+import shutil
 from datetime import datetime
 from pathlib import Path
 from configparser import ConfigParser
-from flask import Flask, request, render_template, jsonify, make_response, abort, send_file
+from typing import Optional, List
+
+from fastapi import FastAPI, UploadFile, File, Form, Query, Request, HTTPException
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from werkzeug.utils import secure_filename
+
 from models import DatabaseManager, FileIndex
 from thumbnails import ThumbnailGenerator
 
@@ -16,7 +23,7 @@ from thumbnails import ThumbnailGenerator
 def parse_args():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description="LAN Uploader - A tiny, mobile-first file uploader for your local network"
+        description="LAN Uploader - A mobile-first file browser for your local network"
     )
     parser.add_argument(
         "--upload-root",
@@ -94,8 +101,14 @@ PORT = int(config["PORT"])
 HOST = config["HOST"]
 DB_PATH = Path(config["DB_PATH"]).resolve()
 
-app = Flask(__name__)
-app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT_LENGTH
+# Initialize FastAPI app
+app = FastAPI(
+    title="LAN Uploader",
+    description="Mobile-first file browser and uploader for local networks",
+    version="2.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+)
 
 # Ensure root exists
 UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
@@ -108,6 +121,12 @@ db.init_db()
 # Initialize thumbnail generator
 THUMBNAIL_CACHE_DIR = UPLOAD_ROOT / ".thumbnails"
 thumbnail_gen = ThumbnailGenerator(THUMBNAIL_CACHE_DIR)
+
+# Mount static files
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Setup templates
+templates = Jinja2Templates(directory="templates")
 
 # ---- Preview Type Detection ----
 
@@ -134,7 +153,7 @@ PREVIEW_HANDLERS = {
     },
 }
 
-def get_preview_type(extension: str) -> tuple[str, str]:
+def get_preview_type(extension: str) -> tuple[Optional[str], Optional[str]]:
     """
     Determine preview type and method for a file extension.
 
@@ -175,65 +194,71 @@ def safe_target_dir(subpath: str) -> Path:
     Normalizes the path, resolves it, verifies it's within UPLOAD_ROOT,
     and creates it if it doesn't exist. Returns the validated Path object.
 
-    Raises 400 error if path attempts to escape UPLOAD_ROOT.
+    Raises HTTPException 400 if path attempts to escape UPLOAD_ROOT.
     """
     subpath = (subpath or "").strip().strip("/")
     target = (UPLOAD_ROOT / subpath).resolve()
     if not within_root(target):
-        abort(400, description="Invalid target directory.")
+        raise HTTPException(status_code=400, detail="Invalid target directory.")
     target.mkdir(parents=True, exist_ok=True)
     return target
 
-@app.route("/", methods=["GET"])
-def index():
-    """
-    Serve the main upload page.
+# ---- Routes ----
 
-    Reads the 'last_dir' cookie to prefill the directory input field,
-    providing a better UX by remembering the user's last upload location.
+@app.get("/", include_in_schema=False)
+async def index(request: Request):
+    """
+    Serve the main file browser page.
+
+    Reads the 'last_dir' cookie to remember the user's last upload location.
     """
     last_dir = request.cookies.get("last_dir", "")
     # Sanitize cookie value for display (validation happens on upload)
     last_dir = last_dir.strip().strip("/")
-    return render_template("upload.html", last_dir=last_dir)
+    return templates.TemplateResponse("upload.html", {
+        "request": request,
+        "last_dir": last_dir
+    })
 
-@app.route("/upload", methods=["POST"])
-def upload():
+@app.post("/upload", tags=["Files"])
+async def upload_files(
+    files: List[UploadFile] = File(...),
+    target_dir: str = Form("")
+):
     """
-    Handle file uploads.
+    Upload one or more files to a directory.
 
-    Accepts single or multiple files via form data, validates the target
-    directory, saves files with secure filenames, and returns upload results.
-    Sets a cookie to remember the upload directory for future uploads.
+    - **files**: List of files to upload
+    - **target_dir**: Target directory path (relative to upload root)
+
+    Returns a list of uploaded files with metadata.
+    Sets a cookie to remember the upload directory.
     """
-    target_dir = request.form.get("target_dir", "").strip().strip("/")
+    target_dir = target_dir.strip().strip("/")
     target = safe_target_dir(target_dir)
 
-    # Accept both single and multiple file inputs
-    # HTML will submit name="files" (multiple), but support "file" too.
-    files = request.files.getlist("files")
     if not files:
-        f = request.files.get("file")
-        if f:
-            files = [f]
-
-    if not files:
-        abort(400, description="No files provided.")
+        raise HTTPException(status_code=400, detail="No files provided.")
 
     saved = []
-    for f in files:
-        if not f or not f.filename:
+    for file in files:
+        if not file.filename:
             continue
-        filename = secure_filename(f.filename)
-        dest = (target / filename)
-        f.save(dest)
+
+        filename = secure_filename(file.filename)
+        dest = target / filename
+
+        # Save file
+        with open(dest, "wb") as buffer:
+            content = await file.read()
+            buffer.write(content)
 
         # Index the file in the database
         file_stat = dest.stat()
         extension = dest.suffix.lower()
         mime_type, _ = mimetypes.guess_type(str(dest))
         preview_type, preview_method = get_preview_type(extension)
-        has_thumbnail = preview_type == 'image'  # For now, only images get thumbnails
+        has_thumbnail = preview_type == 'image'
 
         filepath_rel = dest.relative_to(UPLOAD_ROOT).as_posix()
         parent_path_rel = target.relative_to(UPLOAD_ROOT).as_posix()
@@ -256,69 +281,41 @@ def upload():
             "bytes": file_stat.st_size,
         })
 
-    resp = make_response(jsonify({"ok": True, "saved": saved, "target_dir": target_dir}))
-    # Remember last dir for 30 days (samesite=Lax prevents CSRF)
-    resp.set_cookie("last_dir", target_dir, max_age=60*60*24*30, samesite="Lax")
-    return resp
-
-@app.route("/api/dirs", methods=["GET"])
-def list_dirs():
-    """
-    List subdirectories within a given path (relative to root).
-    Query params:
-      - path: relative path from UPLOAD_ROOT
-
-    DEPRECATED: Use /api/browse instead for both files and directories.
-    """
-    rel = (request.args.get("path") or "").strip().strip("/")
-    base = (UPLOAD_ROOT / rel).resolve()
-    if not within_root(base):
-        abort(400, description="Invalid path.")
-    if not base.exists():
-        abort(404, description="Path not found.")
-
-    entries = []
-    for p in sorted(base.iterdir()):
-        if p.is_dir():
-            rp = p.resolve().relative_to(UPLOAD_ROOT).as_posix()
-            entries.append({"name": p.name, "relpath": rp})
-
-    # Also include breadcrumbs
-    crumbs = []
-    current = Path(rel)
-    # Build breadcrumb segments
-    parts = [part for part in current.parts if part not in (".",)]
-    acc = Path("")
-    crumbs.append({"label": "/", "relpath": ""})
-    for part in parts:
-        acc = (acc / part)
-        crumbs.append({"label": part, "relpath": acc.as_posix()})
-    return jsonify({
+    response = JSONResponse({
         "ok": True,
-        "path": rel,
-        "breadcrumbs": crumbs,
-        "dirs": entries,
+        "saved": saved,
+        "target_dir": target_dir
     })
+    # Remember last dir for 30 days
+    response.set_cookie(
+        key="last_dir",
+        value=target_dir,
+        max_age=60*60*24*30,
+        samesite="lax"
+    )
+    return response
 
-@app.route("/api/browse", methods=["GET"])
-def browse():
+@app.get("/api/browse", tags=["Browse"])
+async def browse(
+    path: str = Query("", description="Directory path relative to upload root")
+):
     """
-    List files and directories within a given path (relative to root).
-    Query params:
-      - path: relative path from UPLOAD_ROOT (default: "")
+    List files and directories within a given path.
+
+    - **path**: Directory path (relative to upload root, default: root)
 
     Returns:
-      - breadcrumbs: navigation breadcrumb trail
-      - directories: list of subdirectories with names and paths
-      - files: list of files with metadata (from database index)
+    - breadcrumbs: Navigation breadcrumb trail
+    - directories: List of subdirectories with metadata
+    - files: List of files with metadata from database index
     """
-    rel = (request.args.get("path") or "").strip().strip("/")
+    rel = path.strip().strip("/")
     base = (UPLOAD_ROOT / rel).resolve()
 
     if not within_root(base):
-        abort(400, description="Invalid path.")
+        raise HTTPException(status_code=400, detail="Invalid path.")
     if not base.exists():
-        abort(404, description="Path not found.")
+        raise HTTPException(status_code=404, detail="Path not found.")
 
     # Get directories from filesystem
     directories = []
@@ -358,104 +355,175 @@ def browse():
         acc = (acc / part)
         crumbs.append({"label": part, "path": acc.as_posix()})
 
-    return jsonify({
+    return {
         "ok": True,
         "path": rel,
         "breadcrumbs": crumbs,
         "directories": directories,
         "files": files,
-    })
+    }
 
-@app.route("/api/file/<path:filepath>", methods=["GET", "DELETE"])
-def file_operation(filepath):
+@app.get("/api/file/{filepath:path}", tags=["Files"])
+async def get_file(
+    filepath: str,
+    download: bool = Query(False, description="Force download instead of inline display")
+):
     """
-    Handle file operations (download/serve or delete).
+    Serve or download a file.
 
-    GET: Serve/download the file
-    DELETE: Delete the file (or directory with ?force=1)
-
-    Args:
-        filepath: Relative path from UPLOAD_ROOT
-        Query params (DELETE only):
-          - force: Set to '1' or 'true' to delete non-empty directories
+    - **filepath**: File path relative to upload root
+    - **download**: If true, force download; otherwise display inline
     """
-    # Sanitize and validate path
     filepath = filepath.strip().strip("/")
     target = (UPLOAD_ROOT / filepath).resolve()
 
     if not within_root(target):
-        abort(400, description="Invalid file path.")
+        raise HTTPException(status_code=400, detail="Invalid file path.")
     if not target.exists():
-        abort(404, description="File not found.")
+        raise HTTPException(status_code=404, detail="File not found.")
+    if target.is_dir():
+        raise HTTPException(status_code=400, detail="Cannot download a directory.")
 
-    if request.method == "GET":
-        # Serve the file
-        if target.is_dir():
-            abort(400, description="Cannot download a directory.")
+    # Determine MIME type
+    mime_type, _ = mimetypes.guess_type(str(target))
 
-        # Determine if we should force download or display inline
-        download = request.args.get("download", "").lower() in ("1", "true")
-        return send_file(
-            target,
-            as_attachment=download,
-            mimetype=mimetypes.guess_type(str(target))[0]
+    # Return file
+    if download:
+        return FileResponse(
+            path=target,
+            media_type=mime_type,
+            filename=target.name
+        )
+    else:
+        return FileResponse(
+            path=target,
+            media_type=mime_type
         )
 
-    elif request.method == "DELETE":
-        # Delete the file or directory
-        if target.is_file():
-            # Delete file from filesystem
-            target.unlink()
-            # Remove from database index
-            db.remove_file(filepath)
-            return jsonify({"ok": True, "message": "File deleted successfully."})
+@app.delete("/api/file/{filepath:path}", tags=["Files"])
+async def delete_file(
+    filepath: str,
+    force: bool = Query(False, description="Force delete non-empty directories")
+):
+    """
+    Delete a file or directory.
 
-        elif target.is_dir():
-            # Check if directory is empty
-            has_contents = any(target.iterdir())
-            force = request.args.get("force", "").lower() in ("1", "true")
+    - **filepath**: File/directory path relative to upload root
+    - **force**: If true, delete non-empty directories (use with caution)
+    """
+    filepath = filepath.strip().strip("/")
+    target = (UPLOAD_ROOT / filepath).resolve()
 
-            if has_contents and not force:
-                # Return error indicating directory is not empty
-                return jsonify({
+    if not within_root(target):
+        raise HTTPException(status_code=400, detail="Invalid file path.")
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="File not found.")
+
+    if target.is_file():
+        # Delete file from filesystem
+        target.unlink()
+        # Remove from database index
+        db.remove_file(filepath)
+        return {"ok": True, "message": "File deleted successfully."}
+
+    elif target.is_dir():
+        # Check if directory is empty
+        has_contents = any(target.iterdir())
+
+        if has_contents and not force:
+            # Return error indicating directory is not empty
+            return JSONResponse(
+                status_code=400,
+                content={
                     "ok": False,
                     "error": "directory_not_empty",
-                    "message": "Directory is not empty. Use force=1 to delete anyway."
-                }), 400
+                    "message": "Directory is not empty. Use force=true to delete anyway."
+                }
+            )
 
-            # Delete directory (and all contents if force=1)
-            import shutil
-            shutil.rmtree(target)
+        # Delete directory (and all contents if force=true)
+        shutil.rmtree(target)
 
-            # Remove all files under this directory from index
-            db.remove_directory(filepath)
+        # Remove all files under this directory from index
+        db.remove_directory(filepath)
 
-            return jsonify({"ok": True, "message": "Directory deleted successfully."})
+        return {"ok": True, "message": "Directory deleted successfully."}
 
-@app.route("/api/search", methods=["GET"])
-def search():
+@app.post("/api/directory", tags=["Browse"])
+async def create_directory(
+    path: str = Query("", description="Parent directory path (relative to upload root)"),
+    name: str = Query(..., min_length=1, max_length=255, description="New directory name")
+):
+    """
+    Create a new directory.
+
+    - **path**: Parent directory path (relative to upload root, default: root)
+    - **name**: Name of the new directory
+
+    Returns the full path of the created directory.
+    """
+    # Sanitize the directory name
+    safe_name = secure_filename(name)
+
+    if not safe_name or safe_name in (".", ".."):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid directory name. Avoid special characters, '.', and '..'."
+        )
+
+    # Validate and resolve parent directory
+    parent_path = path.strip().strip("/")
+    parent_dir = (UPLOAD_ROOT / parent_path).resolve()
+
+    if not within_root(parent_dir):
+        raise HTTPException(status_code=400, detail="Invalid parent directory path.")
+    if not parent_dir.exists():
+        raise HTTPException(status_code=404, detail="Parent directory not found.")
+    if not parent_dir.is_dir():
+        raise HTTPException(status_code=400, detail="Parent path is not a directory.")
+
+    # Create the new directory
+    new_dir = parent_dir / safe_name
+
+    if new_dir.exists():
+        raise HTTPException(
+            status_code=409,
+            detail=f"Directory '{safe_name}' already exists in this location."
+        )
+
+    try:
+        new_dir.mkdir(parents=False, exist_ok=False)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to create directory: {str(e)}"
+        )
+
+    # Return the relative path of the new directory
+    new_dir_rel = new_dir.relative_to(UPLOAD_ROOT).as_posix()
+
+    return {
+        "ok": True,
+        "message": f"Directory '{safe_name}' created successfully.",
+        "path": new_dir_rel,
+        "name": safe_name
+    }
+
+@app.get("/api/search", tags=["Search"])
+async def search_files(
+    q: str = Query(..., min_length=1, description="Search query"),
+    limit: int = Query(100, ge=1, le=1000, description="Maximum number of results")
+):
     """
     Search for files by filename.
 
-    Query params:
-      - q: search query
-      - limit: maximum number of results (default: 100)
+    - **q**: Search query (searches filename)
+    - **limit**: Maximum number of results (default: 100, max: 1000)
 
-    Returns:
-      List of matching files with full metadata
+    Returns list of matching files with full metadata.
     """
-    query = request.args.get("q", "").strip()
-    if not query:
-        abort(400, description="Search query required (param: q)")
-
-    limit = request.args.get("limit", "100")
-    try:
-        limit = int(limit)
-    except ValueError:
-        limit = 100
-
     # Search database
-    results = db.search(query, limit=limit)
+    results = db.search(q, limit=limit)
 
     # Format results
     files = []
@@ -472,68 +540,121 @@ def search():
             "has_thumbnail": file_obj.has_thumbnail,
         })
 
-    return jsonify({
+    return {
         "ok": True,
-        "query": query,
+        "query": q,
         "count": len(files),
         "results": files,
-    })
+    }
 
-@app.route("/api/thumbnail/<path:filepath>", methods=["GET"])
-def get_thumbnail(filepath):
+@app.get("/api/thumbnail/{filepath:path}", tags=["Thumbnails"])
+async def get_thumbnail(filepath: str):
     """
     Get or generate a thumbnail for an image file.
 
-    Args:
-        filepath: Relative path from UPLOAD_ROOT
+    - **filepath**: Image file path relative to upload root
 
-    Returns:
-        JPEG thumbnail image
+    Returns JPEG thumbnail image.
     """
-    # Sanitize and validate path
     filepath = filepath.strip().strip("/")
     source_file = (UPLOAD_ROOT / filepath).resolve()
 
     if not within_root(source_file):
-        abort(400, description="Invalid file path.")
+        raise HTTPException(status_code=400, detail="Invalid file path.")
     if not source_file.exists():
-        abort(404, description="File not found.")
+        raise HTTPException(status_code=404, detail="File not found.")
     if not source_file.is_file():
-        abort(400, description="Cannot generate thumbnail for directory.")
+        raise HTTPException(status_code=400, detail="Cannot generate thumbnail for directory.")
 
     # Check if file is an image
     extension = source_file.suffix.lower()
     preview_type, _ = get_preview_type(extension)
     if preview_type != 'image':
-        abort(400, description="Thumbnails only available for images.")
+        raise HTTPException(status_code=400, detail="Thumbnails only available for images.")
 
     # Generate or retrieve thumbnail
     thumbnail_path = thumbnail_gen.generate(source_file)
     if not thumbnail_path:
-        abort(500, description="Failed to generate thumbnail.")
+        raise HTTPException(status_code=500, detail="Failed to generate thumbnail.")
 
-    return send_file(thumbnail_path, mimetype='image/jpeg')
+    return FileResponse(thumbnail_path, media_type='image/jpeg')
 
-@app.route("/healthz")
-def healthz():
+@app.get("/healthz", tags=["Health"])
+async def healthz():
     """
     Health check endpoint.
 
-    Returns a simple JSON response indicating the service is running
-    and shows the configured upload root directory.
+    Returns service status and configured upload root directory.
     """
-    return {"ok": True, "root": str(UPLOAD_ROOT)}, 200
+    return {
+        "ok": True,
+        "root": str(UPLOAD_ROOT),
+        "version": "2.0.0"
+    }
+
+# ---- Deprecated Routes (for backwards compatibility) ----
+
+@app.get("/api/dirs", tags=["Browse"], deprecated=True)
+async def list_dirs(
+    path: str = Query("", description="Directory path relative to upload root")
+):
+    """
+    List subdirectories within a given path.
+
+    **DEPRECATED**: Use /api/browse instead for both files and directories.
+    """
+    rel = path.strip().strip("/")
+    base = (UPLOAD_ROOT / rel).resolve()
+
+    if not within_root(base):
+        raise HTTPException(status_code=400, detail="Invalid path.")
+    if not base.exists():
+        raise HTTPException(status_code=404, detail="Path not found.")
+
+    entries = []
+    for p in sorted(base.iterdir()):
+        if p.is_dir():
+            rp = p.resolve().relative_to(UPLOAD_ROOT).as_posix()
+            entries.append({"name": p.name, "relpath": rp})
+
+    # Build breadcrumbs
+    crumbs = []
+    current = Path(rel)
+    parts = [part for part in current.parts if part not in (".",)]
+    acc = Path("")
+    crumbs.append({"label": "/", "relpath": ""})
+    for part in parts:
+        acc = (acc / part)
+        crumbs.append({"label": part, "relpath": acc.as_posix()})
+
+    return {
+        "ok": True,
+        "path": rel,
+        "breadcrumbs": crumbs,
+        "dirs": entries,
+    }
+
+# ---- Startup ----
 
 if __name__ == "__main__":
+    import uvicorn
+
     # Print configuration on startup
     print("\n" + "="*50)
     print("LAN Uploader Configuration")
     print("="*50)
     print(f"Upload Root:    {UPLOAD_ROOT}")
     print(f"Max Size:       {config['MAX_CONTENT_LENGTH_MB']} MB")
+    print(f"Database:       {DB_PATH}")
     print(f"Host:           {HOST}")
     print(f"Port:           {PORT}")
+    print(f"API Docs:       http://{HOST}:{PORT}/docs")
     print("="*50 + "\n")
 
-    # Bind to configured host (0.0.0.0 for LAN access, 127.0.0.1 for localhost only)
-    app.run(host=HOST, port=PORT, debug=True)
+    # Run with uvicorn
+    uvicorn.run(
+        "app:app",
+        host=HOST,
+        port=PORT,
+        reload=True
+    )

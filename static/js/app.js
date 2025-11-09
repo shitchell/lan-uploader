@@ -51,6 +51,14 @@ const searchQuery = document.getElementById('search_query');
 const searchResults = document.getElementById('search_results');
 const noResults = document.getElementById('no_results');
 
+// New Folder Modal
+const newFolderModal = document.getElementById('new_folder_modal');
+const closeNewFolderModal = document.getElementById('close_new_folder_modal');
+const cancelNewFolder = document.getElementById('cancel_new_folder');
+const createNewFolder = document.getElementById('create_new_folder');
+const newFolderName = document.getElementById('new_folder_name');
+const newFolderParentPath = document.getElementById('new_folder_parent_path');
+
 // ===== Utility Functions =====
 function formatFileSize(bytes) {
   if (bytes === 0) return '0 B';
@@ -133,6 +141,15 @@ function renderBreadcrumbs(crumbs) {
       breadcrumbs.appendChild(separator);
     }
   });
+
+  // Add the "New Folder" button at the end
+  const newFolderButton = document.createElement('button');
+  newFolderButton.id = 'new_folder_btn';
+  newFolderButton.className = 'new-folder-btn';
+  newFolderButton.title = 'Create new folder';
+  newFolderButton.textContent = '+ New Folder';
+  newFolderButton.addEventListener('click', openNewFolderModal);
+  breadcrumbs.appendChild(newFolderButton);
 }
 
 function renderFileGrid(directories, files) {
@@ -536,6 +553,52 @@ function closeSearchModalFn() {
   searchModal.classList.add('hidden');
 }
 
+// ===== New Folder =====
+function openNewFolderModal() {
+  newFolderParentPath.textContent = '/' + currentPath;
+  newFolderName.value = '';
+  newFolderModal.classList.remove('hidden');
+  // Focus the input for better UX
+  setTimeout(() => newFolderName.focus(), 100);
+}
+
+function closeNewFolderModalFn() {
+  newFolderModal.classList.add('hidden');
+  newFolderName.value = '';
+}
+
+async function performCreateFolder() {
+  const folderName = newFolderName.value.trim();
+
+  if (!folderName) {
+    showStatus('Please enter a folder name', 'error', 2000);
+    return;
+  }
+
+  try {
+    const params = new URLSearchParams({
+      path: currentPath,
+      name: folderName
+    });
+
+    const response = await fetch(`/api/directory?${params}`, {
+      method: 'POST'
+    });
+
+    if (!response.ok) {
+      const data = await response.json();
+      throw new Error(data.detail || 'Failed to create folder');
+    }
+
+    const data = await response.json();
+    showStatus(data.message, 'success');
+    closeNewFolderModalFn();
+    loadDirectory(currentPath); // Refresh current directory
+  } catch (error) {
+    showStatus('Failed to create folder: ' + error.message, 'error');
+  }
+}
+
 // ===== Drag and Drop on Browser =====
 function setupBrowserDragDrop() {
   const browser = document.querySelector('.file-browser');
@@ -623,12 +686,21 @@ searchInput.addEventListener('keypress', (e) => {
 });
 closeSearchModal.addEventListener('click', closeSearchModalFn);
 
+// New Folder (button is created dynamically in renderBreadcrumbs)
+closeNewFolderModal.addEventListener('click', closeNewFolderModalFn);
+cancelNewFolder.addEventListener('click', closeNewFolderModalFn);
+createNewFolder.addEventListener('click', performCreateFolder);
+newFolderName.addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') performCreateFolder();
+});
+
 // Close modals on Escape key
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     if (!uploadModal.classList.contains('hidden')) closeUploadModalFn();
     if (!previewModal.classList.contains('hidden')) closePreviewModalFn();
     if (!searchModal.classList.contains('hidden')) closeSearchModalFn();
+    if (!newFolderModal.classList.contains('hidden')) closeNewFolderModalFn();
   }
 });
 

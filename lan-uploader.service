@@ -17,8 +17,8 @@ WorkingDirectory=/opt/lan-uploader
 # Or use an environment file instead
 # EnvironmentFile=/opt/lan-uploader/.env
 
-# Start the application
-ExecStart=/opt/lan-uploader/.venv/bin/python app.py
+# Start the application with uvicorn
+ExecStart=/opt/lan-uploader/.venv/bin/uvicorn app:app --host 0.0.0.0 --port 8080
 
 # Restart policy
 Restart=on-failure

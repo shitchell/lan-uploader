@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>LAN Uploader</title>
-  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
   <header class="app-header">
@@ -112,6 +112,34 @@
     </div>
   </div>
 
-<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+  <!-- New Folder Modal -->
+  <div id="new_folder_modal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Create New Folder</h2>
+        <button id="close_new_folder_modal" class="close-btn">×</button>
+      </div>
+      <div class="modal-body">
+        <p class="muted">Creating folder in: <strong id="new_folder_parent_path">/</strong></p>
+        <label for="new_folder_name">Folder Name:</label>
+        <input
+          type="text"
+          id="new_folder_name"
+          placeholder="Enter folder name"
+          maxlength="255"
+          style="width: 100%; margin-top: 8px;"
+        >
+        <p class="muted" style="margin-top: 8px; font-size: 12px;">
+          Special characters will be sanitized automatically.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button id="cancel_new_folder" class="secondary-btn">Cancel</button>
+        <button id="create_new_folder" class="primary-btn">Create Folder</button>
+      </div>
+    </div>
+  </div>
+
+<script src="/static/js/app.js"></script>
 </body>
 </html>

@@ -259,6 +259,22 @@ button:active {
   margin: 0 2px;
 }
 
+.new-folder-btn {
+  margin-left: auto;
+  padding: 4px 12px;
+  font-size: 13px;
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.new-folder-btn:hover {
+  background: var(--primary-hover);
+}
+
 /* File Browser */
 .file-browser {
   flex: 1;

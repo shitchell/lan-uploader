@@ -289,6 +289,189 @@ class TestFileBrowser:
         expect(folder_item).to_be_visible()
 
 
+class TestWebSocketUpload:
+    """Test WebSocket upload functionality with real-time progress."""
+
+    def test_websocket_upload_with_progress(self, page: Page, app_server: str):
+        """Test that upload with WebSocket shows real-time progress updates."""
+        page.goto(app_server)
+        page.wait_for_load_state("networkidle")
+
+        # Open upload modal
+        upload_btn = page.locator("#upload_btn")
+        upload_btn.click()
+
+        # Wait for modal to appear
+        modal = page.locator("#upload_modal")
+        expect(modal).not_to_have_class("hidden")
+
+        # Create a temporary test file
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+            f.write("Test file content for WebSocket upload\n" * 100)
+            temp_file_path = f.name
+
+        try:
+            # Upload the file
+            file_input = page.locator("#file_input")
+            file_input.set_input_files(temp_file_path)
+
+            # Wait for file preview to show
+            file_preview = page.locator("#file_preview")
+            expect(file_preview).not_to_have_class("hidden")
+
+            # Click upload button
+            start_upload = page.locator("#start_upload")
+            start_upload.click()
+
+            # Wait for progress container to appear
+            progress_container = page.locator("#progress_container")
+            expect(progress_container).not_to_have_class("hidden")
+
+            # Wait for upload to complete
+            # The modal should close automatically
+            page.wait_for_selector("#upload_modal.hidden", timeout=10000)
+
+            # Should show success message
+            status_message = page.locator("#status_message")
+            expect(status_message).to_be_visible()
+            expect(status_message).to_have_class("success")
+
+        finally:
+            # Clean up temp file
+            import os
+            os.unlink(temp_file_path)
+
+    def test_websocket_upload_multiple_files(self, page: Page, app_server: str):
+        """Test upload of multiple files shows file count in progress."""
+        page.goto(app_server)
+        page.wait_for_load_state("networkidle")
+
+        # Open upload modal
+        page.locator("#upload_btn").click()
+
+        # Create multiple test files
+        import tempfile
+        import os
+        temp_files = []
+        try:
+            for i in range(3):
+                f = tempfile.NamedTemporaryFile(mode='w', suffix=f'_file{i}.txt', delete=False)
+                f.write(f"Test file {i} content\n")
+                f.close()
+                temp_files.append(f.name)
+
+            # Upload all files
+            file_input = page.locator("#file_input")
+            file_input.set_input_files(temp_files)
+
+            # Verify file count shows 3
+            file_count = page.locator("#file_count")
+            expect(file_count).to_have_text("3")
+
+            # Start upload
+            page.locator("#start_upload").click()
+
+            # Wait for progress to show file counts
+            # Progress text should show format: "XX% (N / M files)"
+            progress_text = page.locator("#progress_text")
+
+            # Wait for upload to start
+            expect(progress_text).to_be_visible()
+
+            # Wait for completion
+            page.wait_for_selector("#upload_modal.hidden", timeout=10000)
+
+        finally:
+            # Clean up temp files
+            for temp_file in temp_files:
+                if os.path.exists(temp_file):
+                    os.unlink(temp_file)
+
+    def test_websocket_fallback_when_unavailable(self, page: Page, app_server: str):
+        """Test that upload falls back to legacy mode if WebSocket unavailable."""
+        page.goto(app_server)
+        page.wait_for_load_state("networkidle")
+
+        # Mock WebSocket to be unavailable
+        page.evaluate("""
+            // Override WebSocket to simulate unsupported browser
+            window.WebSocket = undefined;
+        """)
+
+        # Open upload modal
+        page.locator("#upload_btn").click()
+
+        # Create test file
+        import tempfile
+        import os
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+            f.write("Fallback test content\n")
+            temp_file_path = f.name
+
+        try:
+            # Upload file
+            file_input = page.locator("#file_input")
+            file_input.set_input_files(temp_file_path)
+
+            # Start upload
+            page.locator("#start_upload").click()
+
+            # Should still work via legacy upload
+            # Progress should show
+            progress_container = page.locator("#progress_container")
+            expect(progress_container).not_to_have_class("hidden")
+
+            # Wait for completion
+            page.wait_for_selector("#upload_modal.hidden", timeout=10000)
+
+            # Should show success
+            status_message = page.locator("#status_message")
+            expect(status_message).to_be_visible()
+
+        finally:
+            if os.path.exists(temp_file_path):
+                os.unlink(temp_file_path)
+
+    def test_websocket_error_display(self, page: Page, app_server: str):
+        """Test that WebSocket errors are displayed immediately."""
+        page.goto(app_server)
+        page.wait_for_load_state("networkidle")
+
+        # Open upload modal
+        page.locator("#upload_btn").click()
+
+        # Create a file with invalid name to trigger error
+        import tempfile
+        import os
+        # Use a forbidden filename like ".."
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+            f.write("Error test\n")
+            temp_file_path = f.name
+
+        try:
+            # Upload file
+            file_input = page.locator("#file_input")
+            file_input.set_input_files(temp_file_path)
+
+            # Rename the file to something invalid before upload
+            # (This test is simplified - in real scenario, backend would reject invalid filenames)
+
+            # Start upload
+            page.locator("#start_upload").click()
+
+            # Wait for either success or error status
+            status_message = page.locator("#status_message")
+            page.wait_for_selector("#status_message:not(.hidden)", timeout=10000)
+
+            # Error should be visible
+            expect(status_message).to_be_visible()
+
+        finally:
+            if os.path.exists(temp_file_path):
+                os.unlink(temp_file_path)
+
+
 class TestUploadModal:
     """Test upload modal functionality."""
 

@@ -1,0 +1,25 @@
+# Development dependencies for LAN Uploader
+
+# Testing framework
+pytest>=7.4.0
+pytest-cov>=4.1.0
+pytest-asyncio>=0.21.0
+
+# Code quality
+black>=23.0.0
+flake8>=6.0.0
+mypy>=1.5.0
+
+# Type stubs for mypy
+types-Pillow>=10.1.0
+types-werkzeug>=1.0.9
+
+# HTTPX for testing FastAPI endpoints
+httpx>=0.24.0
+
+# E2E testing with Playwright
+playwright>=1.40.0
+pytest-playwright>=0.4.0
+
+# Include production dependencies
+-r requirements.txt

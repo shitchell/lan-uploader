@@ -95,12 +95,12 @@ class ThumbnailGenerator:
             print(f"Error generating thumbnail for {source_file}: {e}")
             return None
 
-    def clear_cache(self):
+    def clear_cache(self) -> None:
         """Remove all cached thumbnails."""
         for thumb in self.cache_dir.glob("*.jpg"):
             thumb.unlink()
 
-    def remove_thumbnail(self, source_path: str):
+    def remove_thumbnail(self, source_path: str) -> None:
         """
         Remove a specific thumbnail from cache.
 

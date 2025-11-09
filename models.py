@@ -3,7 +3,7 @@ Database models for LAN Uploader file indexing and search.
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Callable, Dict, Any
 from sqlalchemy import String, Integer, DateTime, Boolean, Index, create_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, Session
 
@@ -47,7 +47,7 @@ class FileIndex(Base):
         Index('idx_search', 'filename', 'extension'),
     )
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> Dict[str, Any]:
         """Convert model to dictionary for API responses"""
         return {
             'id': self.id,
@@ -83,7 +83,7 @@ class DatabaseManager:
         self.engine = create_engine(db_url, echo=False)
         self.db_url = db_url
 
-    def init_db(self):
+    def init_db(self) -> None:
         """Create all tables if they don't exist"""
         Base.metadata.create_all(self.engine)
 
@@ -93,8 +93,8 @@ class DatabaseManager:
 
     def index_file(self, filepath: str, filename: str, parent_path: str,
                    size: int, modified_at: datetime, extension: str = '',
-                   mime_type: str = None, has_thumbnail: bool = False,
-                   preview_type: str = None) -> FileIndex:
+                   mime_type: Optional[str] = None, has_thumbnail: bool = False,
+                   preview_type: Optional[str] = None) -> FileIndex:
         """
         Add or update a file in the index.
 
@@ -218,7 +218,7 @@ class DatabaseManager:
             ).order_by(FileIndex.filename).all()
             return [session.merge(r) for r in results]
 
-    def reindex_all(self, root_dir: str, progress_callback=None):
+    def reindex_all(self, root_dir: str, progress_callback: Optional[Callable[[int, int], None]] = None) -> None:
         """
         Rebuild entire index by scanning the filesystem.
 

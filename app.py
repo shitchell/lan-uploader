@@ -6,7 +6,8 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 from configparser import ConfigParser
-from typing import Optional, List
+from typing import Optional, List, Dict, Any, Tuple, Union
+from argparse import Namespace
 
 from fastapi import FastAPI, UploadFile, File, Form, Query, Request, HTTPException
 from fastapi.responses import JSONResponse, FileResponse
@@ -20,7 +21,7 @@ from thumbnails import ThumbnailGenerator
 # ---- Configuration Loading ----
 # Priority: 1) Command line args, 2) Environment variables, 3) Config file, 4) Hardcoded defaults
 
-def parse_args():
+def parse_args() -> Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
         description="LAN Uploader - A mobile-first file browser for your local network"
@@ -52,10 +53,10 @@ def parse_args():
     )
     return parser.parse_args()
 
-def load_config(args=None):
+def load_config(args: Optional[Namespace] = None) -> Dict[str, str]:
     """Load configuration with priority: CLI args > env vars > config file > defaults."""
     # Defaults
-    config = {
+    config: Dict[str, str] = {
         "UPLOAD_ROOT": "./uploads",
         "MAX_CONTENT_LENGTH_MB": "1024",
         "PORT": "8080",
@@ -153,7 +154,7 @@ PREVIEW_HANDLERS = {
     },
 }
 
-def get_preview_type(extension: str) -> tuple[Optional[str], Optional[str]]:
+def get_preview_type(extension: str) -> Tuple[Optional[str], Optional[str]]:
     """
     Determine preview type and method for a file extension.
 
@@ -166,7 +167,7 @@ def get_preview_type(extension: str) -> tuple[Optional[str], Optional[str]]:
     extension = extension.lower()
     for preview_type, info in PREVIEW_HANDLERS.items():
         if extension in info['extensions']:
-            return preview_type, info['method']
+            return preview_type, str(info['method'])
     return None, None
 
 # ---- Security Functions ----
@@ -206,7 +207,7 @@ def safe_target_dir(subpath: str) -> Path:
 # ---- Routes ----
 
 @app.get("/", include_in_schema=False)
-async def index(request: Request):
+async def index(request: Request) -> Any:
     """
     Serve the main file browser page.
 
@@ -224,7 +225,7 @@ async def index(request: Request):
 async def upload_files(
     files: List[UploadFile] = File(...),
     target_dir: str = Form("")
-):
+) -> JSONResponse:
     """
     Upload one or more files to a directory.
 
@@ -298,7 +299,7 @@ async def upload_files(
 @app.get("/api/browse", tags=["Browse"])
 async def browse(
     path: str = Query("", description="Directory path relative to upload root")
-):
+) -> Dict[str, Any]:
     """
     List files and directories within a given path.
 
@@ -367,7 +368,7 @@ async def browse(
 async def get_file(
     filepath: str,
     download: bool = Query(False, description="Force download instead of inline display")
-):
+) -> FileResponse:
     """
     Serve or download a file.
 
@@ -400,11 +401,11 @@ async def get_file(
             media_type=mime_type
         )
 
-@app.delete("/api/file/{filepath:path}", tags=["Files"])
+@app.delete("/api/file/{filepath:path}", tags=["Files"], response_model=None)
 async def delete_file(
     filepath: str,
     force: bool = Query(False, description="Force delete non-empty directories")
-):
+) -> Union[Dict[str, Any], JSONResponse]:
     """
     Delete a file or directory.
 
@@ -426,34 +427,34 @@ async def delete_file(
         db.remove_file(filepath)
         return {"ok": True, "message": "File deleted successfully."}
 
-    elif target.is_dir():
-        # Check if directory is empty
-        has_contents = any(target.iterdir())
+    # Handle directory
+    # Check if directory is empty
+    has_contents = any(target.iterdir())
 
-        if has_contents and not force:
-            # Return error indicating directory is not empty
-            return JSONResponse(
-                status_code=400,
-                content={
-                    "ok": False,
-                    "error": "directory_not_empty",
-                    "message": "Directory is not empty. Use force=true to delete anyway."
-                }
-            )
+    if has_contents and not force:
+        # Return error indicating directory is not empty
+        return JSONResponse(
+            status_code=400,
+            content={
+                "ok": False,
+                "error": "directory_not_empty",
+                "message": "Directory is not empty. Use force=true to delete anyway."
+            }
+        )
 
-        # Delete directory (and all contents if force=true)
-        shutil.rmtree(target)
+    # Delete directory (and all contents if force=true)
+    shutil.rmtree(target)
 
-        # Remove all files under this directory from index
-        db.remove_directory(filepath)
+    # Remove all files under this directory from index
+    db.remove_directory(filepath)
 
-        return {"ok": True, "message": "Directory deleted successfully."}
+    return {"ok": True, "message": "Directory deleted successfully."}
 
 @app.post("/api/directory", tags=["Browse"])
 async def create_directory(
     path: str = Query("", description="Parent directory path (relative to upload root)"),
     name: str = Query(..., min_length=1, max_length=255, description="New directory name")
-):
+) -> Dict[str, Any]:
     """
     Create a new directory.
 
@@ -513,7 +514,7 @@ async def create_directory(
 async def search_files(
     q: str = Query(..., min_length=1, description="Search query"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of results")
-):
+) -> Dict[str, Any]:
     """
     Search for files by filename.
 
@@ -548,7 +549,7 @@ async def search_files(
     }
 
 @app.get("/api/thumbnail/{filepath:path}", tags=["Thumbnails"])
-async def get_thumbnail(filepath: str):
+async def get_thumbnail(filepath: str) -> FileResponse:
     """
     Get or generate a thumbnail for an image file.
 
@@ -580,7 +581,7 @@ async def get_thumbnail(filepath: str):
     return FileResponse(thumbnail_path, media_type='image/jpeg')
 
 @app.get("/healthz", tags=["Health"])
-async def healthz():
+async def healthz() -> Dict[str, Any]:
     """
     Health check endpoint.
 
@@ -597,7 +598,7 @@ async def healthz():
 @app.get("/api/dirs", tags=["Browse"], deprecated=True)
 async def list_dirs(
     path: str = Query("", description="Directory path relative to upload root")
-):
+) -> Dict[str, Any]:
     """
     List subdirectories within a given path.
 

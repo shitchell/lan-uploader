@@ -581,7 +581,8 @@ async def index(request: Request) -> Any:
 @app.post("/upload", tags=["Files"])
 async def upload_files(
     files: List[UploadFile] = File(...),
-    target_dir: str = Form("")
+    target_dir: str = Form(""),
+    session_id: Optional[str] = Form(None)
 ) -> JSONResponse:
     """
     Upload one or more files to a directory with streaming.
@@ -591,6 +592,10 @@ async def upload_files(
 
     - **files**: List of files to upload
     - **target_dir**: Target directory path (relative to upload root)
+    - **session_id**: Optional WebSocket session ID for real-time progress updates
+
+    If session_id is provided, progress updates are sent via WebSocket.
+    Otherwise, operates in legacy mode (no real-time updates).
 
     Returns a list of uploaded files with metadata.
     Sets a cookie to remember the upload directory.
@@ -601,6 +606,10 @@ async def upload_files(
     if not files:
         raise HTTPException(status_code=400, detail="No files provided.")
 
+    # Calculate total size for progress tracking
+    total_files = len(files)
+    total_bytes = sum(file.size or 0 for file in files)
+
     # Check disk space before starting upload
     try:
         _, _, available_bytes = check_disk_space(UPLOAD_ROOT)
@@ -610,34 +619,63 @@ async def upload_files(
             detail=f"Failed to check disk space: {str(e)}"
         )
 
+    # Check if we have enough disk space
+    if total_bytes > available_bytes:
+        error_msg = f"Insufficient storage. Need {total_bytes//1024//1024}MB, have {available_bytes//1024//1024}MB"
+
+        # Send error via WebSocket if session exists
+        if session_id:
+            await upload_manager.upload_error(session_id, error_msg, error_code=507)
+
+        raise HTTPException(status_code=507, detail=error_msg)
+
+    # Start upload session if session_id provided
+    if session_id:
+        await upload_manager.start_upload(session_id, total_files, total_bytes)
+
     saved = []
     errors = []
+    bytes_written_total = 0
 
-    for file in files:
+    for index, file in enumerate(files):
         if not file.filename:
             continue
 
         filename = secure_filename(file.filename)
         if not filename or filename in (".", ".."):
-            errors.append({
-                "file": file.filename,
-                "error": "Invalid filename"
-            })
+            error = {"file": file.filename, "error": "Invalid filename"}
+            errors.append(error)
+
+            # Notify via WebSocket
+            if session_id:
+                await upload_manager.upload_error(
+                    session_id,
+                    "Invalid filename",
+                    error_code=400,
+                    filename=file.filename
+                )
             continue
 
         dest = target / filename
 
         # Check if file already exists
         if dest.exists():
-            errors.append({
-                "file": filename,
-                "error": "File already exists"
-            })
+            error = {"file": filename, "error": "File already exists"}
+            errors.append(error)
+
+            if session_id:
+                await upload_manager.upload_error(
+                    session_id,
+                    "File already exists",
+                    error_code=409,
+                    filename=filename
+                )
             continue
 
         try:
             # Stream file directly to destination
             bytes_written = await stream_upload_to_file(file, dest)
+            bytes_written_total += bytes_written
 
             # Index the file in the database
             file_stat = dest.stat()
@@ -669,11 +707,28 @@ async def upload_files(
                     # Thumbnail generation failure is not critical
                     pass
 
-            saved.append({
+            file_info = {
                 "filename": filename,
                 "relative_path": f"/{target_dir}" if target_dir else "/",
                 "bytes": bytes_written,
-            })
+            }
+            saved.append(file_info)
+
+            # Send file completion via WebSocket
+            if session_id:
+                await upload_manager.file_completed(
+                    session_id,
+                    filename=filename,
+                    size=bytes_written,
+                    path=filepath_rel
+                )
+
+                # Send progress update
+                await upload_manager.update_progress(
+                    session_id,
+                    files_completed=index + 1,
+                    bytes_written=bytes_written_total
+                )
 
         except OSError as e:
             # Handle disk full, permission denied, etc.
@@ -687,11 +742,24 @@ async def upload_files(
                     "file": filename,
                     "error": error_msg
                 })
+
+                # Send error via WebSocket IMMEDIATELY
+                if session_id:
+                    await upload_manager.upload_error(
+                        session_id,
+                        error_msg,
+                        error_code=507,
+                        filename=filename
+                    )
+
                 # Stop processing remaining files if disk is full
-                raise HTTPException(
-                    status_code=507,
-                    detail=f"Disk full after {len(saved)} files. {len(files) - len(saved) - len(errors)} files not uploaded."
-                )
+                error_detail = f"Disk full after {len(saved)} files. {len(files) - len(saved) - len(errors)} files not uploaded."
+
+                if session_id:
+                    await upload_manager.upload_error(session_id, error_detail, error_code=507)
+
+                raise HTTPException(status_code=507, detail=error_detail)
+
             elif e.errno == 13:  # EACCES - Permission denied
                 error_msg = "Permission denied"
 
@@ -700,14 +768,33 @@ async def upload_files(
                 "error": error_msg
             })
 
+            if session_id:
+                await upload_manager.upload_error(
+                    session_id,
+                    error_msg,
+                    error_code=507 if e.errno == 28 else 500,
+                    filename=filename
+                )
+
         except Exception as e:
             # Handle any other errors
             if dest.exists():
                 dest.unlink()  # Clean up partial file
-            errors.append({
-                "file": filename,
-                "error": str(e)
-            })
+
+            error = {"file": filename, "error": str(e)}
+            errors.append(error)
+
+            if session_id:
+                await upload_manager.upload_error(
+                    session_id,
+                    str(e),
+                    error_code=500,
+                    filename=filename
+                )
+
+    # Mark upload as complete
+    if session_id:
+        await upload_manager.upload_complete(session_id)
 
     response = JSONResponse({
         "ok": True,

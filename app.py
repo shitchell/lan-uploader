@@ -243,7 +243,11 @@ class UploadSessionManager:
 
         # Keep session data for a while for potential reconnects
         # Clean up old sessions after 1 hour
-        asyncio.create_task(self._cleanup_session(session_id, delay=3600))
+        try:
+            asyncio.create_task(self._cleanup_session(session_id, delay=3600))
+        except RuntimeError:
+            # No event loop running (e.g., during testing)
+            pass
 
     async def _cleanup_session(self, session_id: str, delay: int) -> None:
         """

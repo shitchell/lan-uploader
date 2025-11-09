@@ -30,3 +30,7 @@ Dockerfile*
 /dist/
 *.spec
 *.db
+_work/
+_work.backup/
+.coverage
+htmlcov/

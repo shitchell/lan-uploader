@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>LAN Uploader</title>
-  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="icon" type="image/svg+xml" href="{{ static_url('favicon.svg') }}">
+  <link rel="stylesheet" href="{{ static_url('style.css') }}">
 </head>
 <body>
   <header class="app-header">
@@ -140,7 +140,7 @@
     </div>
   </div>
 
-<script src="/static/js/websocket-client.js"></script>
-<script src="/static/js/app.js"></script>
+<script src="{{ static_url('js/websocket-client.js') }}"></script>
+<script src="{{ static_url('js/app.js') }}"></script>
 </body>
 </html>

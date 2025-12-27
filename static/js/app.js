@@ -362,11 +362,11 @@ async function performUpload() {
     const xhr = new XMLHttpRequest();
 
     xhr.upload.addEventListener('progress', (e) => {
-      // This shows bytes sent to server, not processing progress
-      // WebSocket will show actual processing progress
+      // Show upload progress based on bytes sent to server
       if (e.lengthComputable) {
-        const sendPercent = Math.round((e.loaded / e.total) * 100);
-        console.log(`Bytes sent: ${sendPercent}%`);
+        const percent = Math.round((e.loaded / e.total) * 100);
+        progressBar.style.width = percent + '%';
+        progressText.textContent = `${percent}% (${formatFileSize(e.loaded)} / ${formatFileSize(e.total)})`;
       }
     });
 

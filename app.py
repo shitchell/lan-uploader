@@ -20,9 +20,13 @@ from enum import Enum
 import uuid
 import json
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
 from models import DatabaseManager, FileIndex
 from thumbnails import ThumbnailGenerator
+
+# Thread pool for CPU-bound thumbnail generation (prevents blocking async event loop)
+_thumbnail_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="thumbnail")
 
 # ---- Configuration Loading ----
 # Priority: 1) Command line args, 2) Environment variables, 3) Config file, 4) Hardcoded defaults
@@ -120,6 +124,13 @@ app = FastAPI(
 # Ensure root exists
 UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
 
+# Set temp directory to upload root to avoid /tmp partition filling up on large uploads
+# This affects Starlette's SpooledTemporaryFile used by UploadFile
+import tempfile
+UPLOAD_TEMP_DIR = UPLOAD_ROOT / ".tmp"
+UPLOAD_TEMP_DIR.mkdir(parents=True, exist_ok=True)
+tempfile.tempdir = str(UPLOAD_TEMP_DIR)
+
 # Initialize database
 db_url = f"sqlite:///{DB_PATH}"
 db = DatabaseManager(db_url)
@@ -134,6 +145,18 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Setup templates
 templates = Jinja2Templates(directory="templates")
+
+# Add cache-busting filter for static files
+STATIC_DIR = Path("static")
+def static_url(path: str) -> str:
+    """Generate static URL with cache-busting query string based on file mtime."""
+    file_path = STATIC_DIR / path
+    if file_path.exists():
+        mtime = int(file_path.stat().st_mtime)
+        return f"/static/{path}?v={mtime}"
+    return f"/static/{path}"
+
+templates.env.globals["static_url"] = static_url
 
 # ---- Preview Type Detection ----
 
@@ -527,10 +550,11 @@ async def stream_upload_to_file(
     chunk_size: int = 1024 * 1024  # 1MB chunks
 ) -> int:
     """
-    Stream an uploaded file directly to destination without using temp files.
+    Stream an uploaded file to a .part file, then rename on success.
 
-    Reads the upload in chunks and writes them directly to the destination file,
-    avoiding the need for temporary file storage.
+    Writes to a temporary .part file in the same directory as the destination,
+    avoiding /tmp partition issues for large files. On success, atomically
+    renames to the final destination.
 
     Args:
         upload_file: The FastAPI UploadFile object to stream
@@ -544,19 +568,22 @@ async def stream_upload_to_file(
         OSError: If disk is full, permission denied, or other I/O error occurs
     """
     bytes_written = 0
+    part_file = destination.parent / f".{destination.name}.part"
 
     try:
-        async with aiofiles.open(destination, 'wb') as f:
+        async with aiofiles.open(part_file, 'wb') as f:
             while True:
                 chunk = await upload_file.read(chunk_size)
                 if not chunk:
                     break
                 await f.write(chunk)
                 bytes_written += len(chunk)
+        # Atomic rename on success
+        part_file.rename(destination)
     except Exception as e:
         # Clean up partial file on any error
-        if destination.exists():
-            destination.unlink()
+        if part_file.exists():
+            part_file.unlink()
         raise
 
     return bytes_written
@@ -699,13 +726,14 @@ async def upload_files(
                 preview_type=preview_type,
             )
 
-            # Generate thumbnail if image
+            # Generate thumbnail in background (non-blocking) if image
             if preview_type == 'image':
-                try:
-                    thumbnail_gen.generate(dest)
-                except Exception as e:
-                    # Thumbnail generation failure is not critical
-                    pass
+                def _generate_thumbnail(path: Path) -> None:
+                    try:
+                        thumbnail_gen.generate(path)
+                    except Exception:
+                        pass  # Thumbnail generation failure is not critical
+                asyncio.get_event_loop().run_in_executor(_thumbnail_executor, _generate_thumbnail, dest)
 
             file_info = {
                 "filename": filename,

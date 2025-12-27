@@ -14,6 +14,14 @@ THUMBNAIL_SIZE = (300, 300)  # Max dimensions (maintains aspect ratio)
 THUMBNAIL_FORMAT = "JPEG"
 THUMBNAIL_QUALITY = 85
 
+# Maximum pixels to allow for thumbnail generation (200 megapixels)
+# This prevents memory exhaustion from extremely large images
+MAX_THUMBNAIL_PIXELS = 200_000_000
+
+# Increase PIL's decompression bomb limit to match our threshold
+# Default is ~89MP which is too low for panoramas and high-res photos
+Image.MAX_IMAGE_PIXELS = MAX_THUMBNAIL_PIXELS
+
 
 class ThumbnailGenerator:
     """
@@ -69,6 +77,14 @@ class ThumbnailGenerator:
         # Generate thumbnail
         try:
             with Image.open(source_file) as img:
+                # Check image dimensions before processing
+                width, height = img.size
+                pixel_count = width * height
+                if pixel_count > MAX_THUMBNAIL_PIXELS:
+                    print(f"Skipping thumbnail for {source_file}: "
+                          f"{pixel_count:,} pixels exceeds limit of {MAX_THUMBNAIL_PIXELS:,}")
+                    return None
+
                 # Convert RGBA to RGB if necessary (for JPEG compatibility)
                 if img.mode in ('RGBA', 'LA', 'P'):
                     # Create white background
@@ -91,6 +107,9 @@ class ThumbnailGenerator:
 
             return cache_path
 
+        except Image.DecompressionBombError as e:
+            print(f"Image too large for thumbnail generation {source_file}: {e}")
+            return None
         except Exception as e:
             print(f"Error generating thumbnail for {source_file}: {e}")
             return None

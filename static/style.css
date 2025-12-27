@@ -653,13 +653,19 @@ button:active {
 .progress-text {
   position: absolute;
   top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  left: 0;
+  right: 0;
+  transform: translateY(-50%);
   color: var(--text-color);
   font-weight: bold;
   font-size: 14px;
   z-index: 1;
   text-shadow: 0 0 3px var(--bg-color);
+  text-align: center;
+  padding: 0 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Preview Content */
@@ -760,10 +766,32 @@ button:active {
 
   .header-actions {
     width: 100%;
+    flex-wrap: wrap;
   }
 
   .search-container {
     width: 100%;
     order: -1;
+    flex: 1 1 100%;
+    min-width: unset;
+  }
+
+  /* Make Upload button icon-only on mobile */
+  #upload_btn .btn-icon {
+    margin-right: 0;
+  }
+
+  #upload_btn {
+    padding: 8px 12px;
+  }
+
+  /* Hide "Upload" text on mobile, show only icon */
+  @supports (content-visibility: auto) {
+    #upload_btn {
+      font-size: 0;
+    }
+    #upload_btn .btn-icon {
+      font-size: 16px;
+    }
   }
 }

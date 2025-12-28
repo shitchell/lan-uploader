@@ -114,10 +114,22 @@
         <button id="preview_nav_next" class="preview-nav-btn secondary-btn" title="Next file">&rsaquo;</button>
       </div>
       <div class="modal-footer flex-row">
+        <button id="fullscreen_btn" class="secondary-btn" title="Fullscreen (F)">Fullscreen</button>
         <button id="download_file" class="secondary-btn">Download</button>
         <button id="delete_file" class="danger-btn">Delete</button>
       </div>
     </div>
+  </div>
+
+  <!-- Fullscreen Gallery Container -->
+  <div id="fullscreen_gallery" class="fullscreen-gallery hidden">
+    <div id="fullscreen_content" class="fullscreen-content"></div>
+    <div class="fullscreen-nav flex-center">
+      <button id="fullscreen_nav_prev" class="fullscreen-nav-btn" title="Previous file">&lsaquo;</button>
+      <span id="fullscreen_nav_index" class="fullscreen-nav-index">1/1</span>
+      <button id="fullscreen_nav_next" class="fullscreen-nav-btn" title="Next file">&rsaquo;</button>
+    </div>
+    <button id="fullscreen_close" class="fullscreen-close-btn" title="Exit fullscreen (Esc)">&times;</button>
   </div>
 
   <!-- Search Results Modal -->

@@ -33,4 +33,7 @@ export const state = {
   selectMode: false,
   selectedItems: new Map(), // path -> { path, name, isDirectory, element }
   lastSelectedPath: null,
+
+  // Fullscreen gallery mode
+  isFullscreen: false,
 };

@@ -35,6 +35,12 @@ import {
   navigatePreviewPrev,
   navigatePreviewNext,
   updateNavigationUI,
+  enterFullscreen,
+  exitFullscreen,
+  toggleFullscreen,
+  isFullscreenSupported,
+  navigateFullscreenPrev,
+  navigateFullscreenNext,
 } from './preview.js';
 import {
   performSearch,
@@ -136,6 +142,12 @@ const cancelNewFolderBtn = document.getElementById('cancel_new_folder');
 const createNewFolderBtn = document.getElementById('create_new_folder');
 const newFolderNameInput = document.getElementById('new_folder_name');
 const newFolderParentPath = document.getElementById('new_folder_parent_path');
+
+const fullscreenBtn = document.getElementById('fullscreen_btn');
+const fullscreenGallery = document.getElementById('fullscreen_gallery');
+const fullscreenCloseBtn = document.getElementById('fullscreen_close');
+const fullscreenNavPrev = document.getElementById('fullscreen_nav_prev');
+const fullscreenNavNext = document.getElementById('fullscreen_nav_next');
 
 // ===== New Folder Modal =====
 function openNewFolderModal() {
@@ -259,6 +271,27 @@ if (previewNavNext) {
   previewNavNext.addEventListener('click', navigatePreviewNext);
 }
 
+// Fullscreen
+if (fullscreenBtn) {
+  if (!isFullscreenSupported()) {
+    fullscreenBtn.style.display = 'none';
+  } else {
+    fullscreenBtn.addEventListener('click', toggleFullscreen);
+  }
+}
+
+if (fullscreenCloseBtn) {
+  fullscreenCloseBtn.addEventListener('click', exitFullscreen);
+}
+
+if (fullscreenNavPrev) {
+  fullscreenNavPrev.addEventListener('click', navigateFullscreenPrev);
+}
+
+if (fullscreenNavNext) {
+  fullscreenNavNext.addEventListener('click', navigateFullscreenNext);
+}
+
 // Search
 searchBtn.addEventListener('click', (e) => {
   if (window.innerWidth <= 600 && !isMobileSearchActive()) {
@@ -360,9 +393,30 @@ newFolderNameInput.addEventListener('keypress', (e) => {
 });
 
 // Escape to close modals, exit select mode, and clear selection
-// Arrow keys to navigate preview modal
+// Arrow keys to navigate preview modal or fullscreen gallery
+// F key to toggle fullscreen mode
 document.addEventListener('keydown', (e) => {
+  // Handle F key for fullscreen toggle
+  if (e.key === 'f' || e.key === 'F') {
+    const previewModal = document.getElementById('preview_modal');
+
+    // Toggle fullscreen if preview modal is open or already in fullscreen
+    if (!previewModal.classList.contains('hidden') ||
+        !fullscreenGallery.classList.contains('hidden')) {
+      e.preventDefault();
+      toggleFullscreen();
+      return;
+    }
+  }
+
   if (e.key === 'Escape') {
+    // Check if in fullscreen mode first
+    if (state.isFullscreen) {
+      e.preventDefault();
+      exitFullscreen();
+      return;
+    }
+
     // Exit select mode first if active
     if (state.selectMode) {
       exitSelectMode();
@@ -384,10 +438,14 @@ document.addEventListener('keydown', (e) => {
     if (!newFolderModal.classList.contains('hidden')) closeNewFolderModal();
   }
 
-  // Arrow key navigation in preview modal
+  // Arrow key navigation in preview modal OR fullscreen mode
   if (e.key === 'ArrowLeft') {
     const previewModal = document.getElementById('preview_modal');
-    if (!previewModal.classList.contains('hidden')) {
+
+    if (!fullscreenGallery.classList.contains('hidden')) {
+      e.preventDefault();
+      navigateFullscreenPrev();
+    } else if (!previewModal.classList.contains('hidden')) {
       e.preventDefault();
       navigatePreviewPrev();
     }
@@ -395,10 +453,31 @@ document.addEventListener('keydown', (e) => {
 
   if (e.key === 'ArrowRight') {
     const previewModal = document.getElementById('preview_modal');
-    if (!previewModal.classList.contains('hidden')) {
+
+    if (!fullscreenGallery.classList.contains('hidden')) {
+      e.preventDefault();
+      navigateFullscreenNext();
+    } else if (!previewModal.classList.contains('hidden')) {
       e.preventDefault();
       navigatePreviewNext();
     }
+  }
+});
+
+// Handle native fullscreen exit (e.g., Escape in fullscreen mode)
+document.addEventListener('fullscreenchange', () => {
+  // If we exited native fullscreen but our gallery is still visible, hide it
+  if (!document.fullscreenElement &&
+      !fullscreenGallery.classList.contains('hidden')) {
+    exitFullscreen();
+  }
+});
+
+// Vendor prefixes for fullscreen change
+document.addEventListener('webkitfullscreenchange', () => {
+  if (!document.webkitFullscreenElement &&
+      !fullscreenGallery.classList.contains('hidden')) {
+    exitFullscreen();
   }
 });
 

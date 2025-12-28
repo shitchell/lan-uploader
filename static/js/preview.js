@@ -270,3 +270,227 @@ export async function deleteFileDirectly(filepath, filename, onComplete) {
     }
   }
 }
+
+// ===== Fullscreen Gallery Mode =====
+
+// Fullscreen elements cache
+let fullscreenElements = null;
+
+function getFullscreenElements() {
+  if (!fullscreenElements) {
+    fullscreenElements = {
+      gallery: document.getElementById('fullscreen_gallery'),
+      content: document.getElementById('fullscreen_content'),
+      navPrev: document.getElementById('fullscreen_nav_prev'),
+      navNext: document.getElementById('fullscreen_nav_next'),
+      navIndex: document.getElementById('fullscreen_nav_index'),
+      closeBtn: document.getElementById('fullscreen_close'),
+    };
+  }
+  return fullscreenElements;
+}
+
+/**
+ * Check if Fullscreen API is supported
+ * @returns {boolean} true if fullscreen is supported
+ */
+export function isFullscreenSupported() {
+  return !!(
+    document.fullscreenEnabled ||
+    document.webkitFullscreenEnabled ||
+    document.mozFullScreenEnabled ||
+    document.msFullscreenEnabled
+  );
+}
+
+/**
+ * Check if currently in native fullscreen mode
+ * @returns {boolean} true if in native fullscreen
+ */
+export function isInNativeFullscreen() {
+  return !!(
+    document.fullscreenElement ||
+    document.webkitFullscreenElement ||
+    document.mozFullScreenElement ||
+    document.msFullscreenElement
+  );
+}
+
+/**
+ * Enter fullscreen gallery mode
+ */
+export async function enterFullscreen() {
+  if (!state.currentPreviewFile) return;
+  if (!isFullscreenSupported()) {
+    showStatus('Fullscreen not supported in this browser', 'error', 3000);
+    return;
+  }
+
+  const { gallery, content } = getFullscreenElements();
+
+  // Copy current preview content to fullscreen container
+  const previewContent = document.getElementById('preview_content');
+  content.innerHTML = previewContent.innerHTML;
+
+  // Show the fullscreen container
+  gallery.classList.remove('hidden');
+
+  // Update navigation UI
+  updateFullscreenNavigationUI();
+
+  // Request native fullscreen
+  try {
+    if (gallery.requestFullscreen) {
+      await gallery.requestFullscreen();
+    } else if (gallery.webkitRequestFullscreen) {
+      await gallery.webkitRequestFullscreen();
+    } else if (gallery.mozRequestFullScreen) {
+      await gallery.mozRequestFullScreen();
+    } else if (gallery.msRequestFullscreen) {
+      await gallery.msRequestFullscreen();
+    }
+    state.isFullscreen = true;
+  } catch (error) {
+    console.error('Failed to enter fullscreen:', error);
+    // Still show the fullscreen container even if native fullscreen fails
+    state.isFullscreen = true;
+  }
+}
+
+/**
+ * Exit fullscreen gallery mode
+ */
+export async function exitFullscreen() {
+  const { gallery } = getFullscreenElements();
+
+  // Hide the fullscreen container
+  gallery.classList.add('hidden');
+  state.isFullscreen = false;
+
+  // Exit native fullscreen if active
+  if (isInNativeFullscreen()) {
+    try {
+      if (document.exitFullscreen) {
+        await document.exitFullscreen();
+      } else if (document.webkitExitFullscreen) {
+        await document.webkitExitFullscreen();
+      } else if (document.mozCancelFullScreen) {
+        await document.mozCancelFullScreen();
+      } else if (document.msExitFullscreen) {
+        await document.msExitFullscreen();
+      }
+    } catch (error) {
+      console.error('Failed to exit fullscreen:', error);
+    }
+  }
+}
+
+/**
+ * Toggle fullscreen mode
+ */
+export async function toggleFullscreen() {
+  if (state.isFullscreen) {
+    await exitFullscreen();
+  } else {
+    await enterFullscreen();
+  }
+}
+
+/**
+ * Update fullscreen navigation UI
+ */
+export function updateFullscreenNavigationUI() {
+  const { navPrev, navNext, navIndex } = getFullscreenElements();
+  if (!navPrev || !navNext || !navIndex) return;
+
+  const files = getNavigableFiles();
+  const currentIndex = getCurrentFileIndex();
+  const total = files.length;
+
+  // Update index display (1-based for user display)
+  navIndex.textContent = total > 0 ? `${currentIndex + 1}/${total}` : '0/0';
+
+  // Update button states
+  navPrev.disabled = currentIndex <= 0;
+  navNext.disabled = currentIndex === -1 || currentIndex >= total - 1;
+}
+
+/**
+ * Navigate to previous file in fullscreen mode
+ */
+export function navigateFullscreenPrev() {
+  if (!state.isFullscreen) return;
+
+  const files = getNavigableFiles();
+  const currentIndex = getCurrentFileIndex();
+
+  if (currentIndex <= 0) return;
+
+  const prevFile = files[currentIndex - 1];
+  updateFullscreenContent(prevFile);
+}
+
+/**
+ * Navigate to next file in fullscreen mode
+ */
+export function navigateFullscreenNext() {
+  if (!state.isFullscreen) return;
+
+  const files = getNavigableFiles();
+  const currentIndex = getCurrentFileIndex();
+
+  if (currentIndex === -1 || currentIndex >= files.length - 1) return;
+
+  const nextFile = files[currentIndex + 1];
+  updateFullscreenContent(nextFile);
+}
+
+/**
+ * Update fullscreen content with new file
+ * @param {Object} file - File object to display
+ */
+async function updateFullscreenContent(file) {
+  const { content } = getFullscreenElements();
+
+  // Update state
+  state.currentPreviewFile = file;
+
+  // Fade out
+  content.style.opacity = '0';
+  await new Promise(resolve => setTimeout(resolve, 150));
+
+  // Generate content based on file type
+  try {
+    if (file.preview_type === 'image') {
+      content.innerHTML = `<img src="${getFileUrl(file.path)}" alt="${escapeHtml(file.name)}">`;
+    } else if (file.preview_type === 'video') {
+      content.innerHTML = `<video controls src="${getFileUrl(file.path)}"></video>`;
+    } else if (file.preview_type === 'audio') {
+      content.innerHTML = `<audio controls src="${getFileUrl(file.path)}"></audio>`;
+    } else if (file.preview_type === 'text' || file.preview_type === 'code') {
+      const data = await fetchTextPreview(file.path);
+      const truncatedNote = data.truncated
+        ? `<p class="muted">(Showing first 1000 chars of ${formatFileSize(data.size)})</p>`
+        : '';
+      content.innerHTML = `<pre>${escapeHtml(data.content)}</pre>${truncatedNote}`;
+    } else {
+      content.innerHTML = `
+        <div class="muted">
+          <p>Preview not available for this file type</p>
+          <p>File: ${escapeHtml(file.name)}</p>
+          <p>Size: ${formatFileSize(file.size)}</p>
+          <p>Type: ${file.mime_type || 'unknown'}</p>
+        </div>
+      `;
+    }
+  } catch (error) {
+    content.innerHTML = `<p class="muted">Failed to load preview: ${error.message}</p>`;
+  }
+
+  // Fade in
+  content.style.opacity = '1';
+
+  // Update navigation UI for both preview and fullscreen
+  updateNavigationUI();
+  updateFullscreenNavigationUI();
+}

@@ -1109,6 +1109,38 @@ async def get_file(
             media_type=mime_type
         )
 
+
+@app.get("/api/preview/{filepath:path}", tags=["Files"])
+async def preview_file(
+    filepath: str,
+    limit: int = Query(1000, ge=1, le=100000, description="Maximum characters to return")
+) -> Dict[str, Any]:
+    """
+    Get a text preview of a file (first N characters).
+
+    - **filepath**: File path relative to upload root
+    - **limit**: Maximum characters to return (default 1000)
+    """
+    filepath = filepath.strip().strip("/")
+    target = (UPLOAD_ROOT / filepath).resolve()
+
+    if not within_root(target):
+        raise HTTPException(status_code=400, detail="Invalid file path.")
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="File not found.")
+    if target.is_dir():
+        raise HTTPException(status_code=400, detail="Cannot preview a directory.")
+
+    file_size = target.stat().st_size
+    with open(target, 'r', errors='replace') as f:
+        content = f.read(limit)
+
+    return {
+        "content": content,
+        "truncated": file_size > limit,
+        "size": file_size
+    }
+
 @app.delete("/api/file/{filepath:path}", tags=["Files"], response_model=None)
 async def delete_file(
     filepath: str,

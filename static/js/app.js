@@ -629,9 +629,12 @@ async function openPreview(file) {
     } else if (file.preview_type === 'audio') {
       previewContent.innerHTML = `<audio controls src="/api/file/${file.path}"></audio>`;
     } else if (file.preview_type === 'text' || file.preview_type === 'code') {
-      const response = await fetch(`/api/file/${file.path}`);
-      const text = await response.text();
-      previewContent.innerHTML = `<pre>${escapeHtml(text)}</pre>`;
+      const response = await fetch(`/api/preview/${file.path}`);
+      const data = await response.json();
+      const truncatedNote = data.truncated
+        ? `<p class="muted">(Showing first 1000 chars of ${formatFileSize(data.size)})</p>`
+        : '';
+      previewContent.innerHTML = `<pre>${escapeHtml(data.content)}</pre>${truncatedNote}`;
     } else {
       previewContent.innerHTML = `
         <div class="muted">

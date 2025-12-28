@@ -521,7 +521,10 @@ body.select-mode .folder-item {
 }
 
 .preview-modal-content {
-  max-width: 900px;
+  max-width: var(--preview-max-width);
+  max-height: var(--preview-max-height);
+  min-width: var(--preview-min-width);
+  min-height: var(--preview-min-height);
 }
 
 /* .modal-header uses .flex-between class in HTML */
@@ -688,8 +691,9 @@ body.select-mode .folder-item {
 .preview-content img,
 .preview-content video {
   max-width: 100%;
-  max-height: 70vh;
+  max-height: calc(var(--preview-max-height) - 120px);
   border-radius: 8px;
+  object-fit: contain;
 }
 
 .preview-content pre {

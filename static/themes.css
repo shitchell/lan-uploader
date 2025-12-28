@@ -50,6 +50,12 @@
   --modal-overlay: rgba(0, 0, 0, 0.5);
   --modal-bg: #ffffff;
 
+  /* Preview modal sizing */
+  --preview-max-width: 80vw;
+  --preview-max-height: 80vh;
+  --preview-min-width: 300px;
+  --preview-min-height: 200px;
+
   /* Hover states */
   --item-hover: #f4f7ff;
 }
@@ -100,6 +106,12 @@
     /* Modal */
     --modal-overlay: rgba(0, 0, 0, 0.7);
     --modal-bg: #1a1a1a;
+
+    /* Preview modal sizing */
+    --preview-max-width: 80vw;
+    --preview-max-height: 80vh;
+    --preview-min-width: 300px;
+    --preview-min-height: 200px;
 
     /* Hover states */
     --item-hover: #1e2a3a;

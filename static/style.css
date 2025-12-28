@@ -206,17 +206,59 @@ button:active {
 
 /* Breadcrumbs */
 .breadcrumbs {
+  position: relative;
+  display: flex;
+  align-items: center;
   overflow: hidden;
   white-space: nowrap;
-  text-overflow: ellipsis;
-  direction: rtl;
-  text-align: left;
-  unicode-bidi: plaintext;
   padding: 4px 0; /* room for button padding */
 }
 
+/* Inner scrollable container */
+.breadcrumbs-inner {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  overflow-x: auto;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
+.breadcrumbs-inner::-webkit-scrollbar {
+  display: none; /* Chrome/Safari/WebKit */
+}
+
+/* Left fade overlay indicating overflow */
+.breadcrumbs-fade {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 40px;
+  background: linear-gradient(to right, var(--bg-color) 0%, var(--bg-color) 30%, transparent 100%);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s;
+  z-index: 1;
+}
+
+.breadcrumbs-fade.visible {
+  opacity: 1;
+}
+
+/* Ellipsis indicator */
+.breadcrumbs-fade::before {
+  content: '...';
+  position: absolute;
+  left: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  font-weight: bold;
+}
+
 .breadcrumbs a {
-  direction: ltr;
+  flex-shrink: 0;
   text-decoration: none;
   background: var(--bg-secondary);
   padding: 4px 10px;
@@ -232,6 +274,7 @@ button:active {
 }
 
 .breadcrumbs .separator {
+  flex-shrink: 0;
   color: var(--text-muted);
   margin: 0 2px;
 }
@@ -242,7 +285,7 @@ button:active {
 
 /* Extends .primary-btn with smaller size for breadcrumbs */
 .new-folder-btn {
-  direction: ltr;
+  flex-shrink: 0;
   padding: 4px 12px;
   font-size: 13px;
   border-radius: 6px;

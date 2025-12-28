@@ -264,9 +264,59 @@ export async function loadDirectory(path, append = false) {
   }
 }
 
+// Scroll breadcrumbs to show the rightmost content (current folder)
+function scrollBreadcrumbsToEnd(inner) {
+  inner.scrollLeft = inner.scrollWidth - inner.clientWidth;
+}
+
+// Update fade overlay visibility based on overflow and scroll position
+function updateBreadcrumbFade(inner, fade) {
+  // Show fade if there's overflow (content wider than container)
+  const hasOverflow = inner.scrollWidth > inner.clientWidth;
+
+  if (hasOverflow) {
+    fade.classList.add('visible');
+  } else {
+    fade.classList.remove('visible');
+  }
+}
+
+// Initialize breadcrumb scroll behavior (called once after first render)
+let breadcrumbScrollInitialized = false;
+function initBreadcrumbScroll(inner, fade) {
+  if (breadcrumbScrollInitialized) return;
+  breadcrumbScrollInitialized = true;
+
+  // Update fade on resize
+  const resizeObserver = new ResizeObserver(() => {
+    scrollBreadcrumbsToEnd(inner);
+    updateBreadcrumbFade(inner, fade);
+  });
+  resizeObserver.observe(inner);
+}
+
 function renderBreadcrumbs(crumbs) {
   const { breadcrumbs } = getElements();
-  breadcrumbs.innerHTML = '';
+
+  // Get or create inner container and fade element
+  let inner = breadcrumbs.querySelector('.breadcrumbs-inner');
+  let fade = breadcrumbs.querySelector('.breadcrumbs-fade');
+
+  if (!inner) {
+    fade = document.createElement('div');
+    fade.className = 'breadcrumbs-fade';
+    fade.id = 'breadcrumbs_fade';
+
+    inner = document.createElement('div');
+    inner.className = 'breadcrumbs-inner';
+    inner.id = 'breadcrumbs_inner';
+
+    breadcrumbs.innerHTML = '';
+    breadcrumbs.appendChild(fade);
+    breadcrumbs.appendChild(inner);
+  }
+
+  inner.innerHTML = '';
 
   crumbs.forEach((crumb, index) => {
     const link = document.createElement('a');
@@ -277,13 +327,13 @@ function renderBreadcrumbs(crumbs) {
       e.preventDefault();
       navigateTo(crumb.path);
     });
-    breadcrumbs.appendChild(link);
+    inner.appendChild(link);
 
     if (index < crumbs.length - 1) {
       const separator = document.createElement('span');
       separator.className = 'separator';
       separator.textContent = '›';
-      breadcrumbs.appendChild(separator);
+      inner.appendChild(separator);
     }
   });
 
@@ -291,7 +341,7 @@ function renderBreadcrumbs(crumbs) {
   const separator = document.createElement('span');
   separator.className = 'separator';
   separator.textContent = '›';
-  breadcrumbs.appendChild(separator);
+  inner.appendChild(separator);
 
   const newFolderButton = document.createElement('button');
   newFolderButton.id = 'new_folder_btn';
@@ -303,7 +353,14 @@ function renderBreadcrumbs(crumbs) {
       actionHandlers.openNewFolderModal();
     }
   });
-  breadcrumbs.appendChild(newFolderButton);
+  inner.appendChild(newFolderButton);
+
+  // Scroll to show rightmost content and update fade visibility
+  requestAnimationFrame(() => {
+    scrollBreadcrumbsToEnd(inner);
+    updateBreadcrumbFade(inner, fade);
+    initBreadcrumbScroll(inner, fade);
+  });
 }
 
 function renderFileGrid(directories, files, append = false) {

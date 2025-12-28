@@ -840,6 +840,45 @@ async def upload_files(
     )
     return response
 
+
+# ---- Filesystem/DB Helpers ----
+
+def index_file_from_path(path: Path) -> 'FileIndex':
+    """
+    Index a file from filesystem and return the DB record.
+
+    This performs lazy caching: reads file metadata from filesystem,
+    stores it in the database, and returns the record.
+
+    Args:
+        path: Absolute path to the file
+
+    Returns:
+        FileIndex object with file metadata
+    """
+    stat = path.stat()
+    rel_path = path.relative_to(UPLOAD_ROOT).as_posix()
+    parent = path.parent.relative_to(UPLOAD_ROOT).as_posix() if path.parent != UPLOAD_ROOT else ""
+    ext = path.suffix.lower()
+    mime, _ = mimetypes.guess_type(path.name)
+    preview_type, _ = get_preview_type(ext)
+
+    # Check if thumbnail actually exists in cache
+    has_thumb = preview_type == 'image' and thumbnail_gen.get_cached(path) is not None
+
+    return db.index_file(
+        filepath=rel_path,
+        filename=path.name,
+        parent_path=parent,
+        size=stat.st_size,
+        modified_at=datetime.fromtimestamp(stat.st_mtime),
+        extension=ext,
+        mime_type=mime,
+        has_thumbnail=has_thumb,
+        preview_type=preview_type,
+    )
+
+
 @app.get("/api/browse", tags=["Browse"])
 async def browse(
     path: str = Query("", description="Directory path relative to upload root")
@@ -847,12 +886,15 @@ async def browse(
     """
     List files and directories within a given path.
 
+    Uses filesystem as source of truth for what exists, with DB as metadata cache.
+    New files discovered on filesystem are automatically indexed (lazy caching).
+
     - **path**: Directory path (relative to upload root, default: root)
 
     Returns:
     - breadcrumbs: Navigation breadcrumb trail
-    - directories: List of subdirectories with metadata
-    - files: List of files with metadata from database index
+    - directories: List of subdirectories with file counts
+    - files: List of files with metadata (from DB cache)
     """
     rel = path.strip().strip("/")
     base = (UPLOAD_ROOT / rel).resolve()
@@ -862,33 +904,47 @@ async def browse(
     if not base.exists():
         raise HTTPException(status_code=404, detail="Path not found.")
 
-    # Get directories from filesystem
+    # Get directories and files from FILESYSTEM (source of truth for what exists)
     directories = []
+    files = []
+
     for p in sorted(base.iterdir()):
+        # Skip hidden files/directories
+        if p.name.startswith('.'):
+            continue
+
         if p.is_dir():
             rp = p.resolve().relative_to(UPLOAD_ROOT).as_posix()
-            # Count files in directory (from database)
-            file_count = len(db.list_files(parent_path=rp))
+            # Count files directly from filesystem
+            try:
+                file_count = sum(1 for f in p.iterdir() if f.is_file() and not f.name.startswith('.'))
+            except PermissionError:
+                file_count = 0
             directories.append({
                 "name": p.name,
                 "path": rp,
                 "file_count": file_count,
             })
+        elif p.is_file():
+            rel_path = p.relative_to(UPLOAD_ROOT).as_posix()
 
-    # Get files from database index
-    files = []
-    db_files = db.list_files(parent_path=rel)
-    for file_obj in db_files:
-        files.append({
-            "name": file_obj.filename,
-            "path": file_obj.filepath,
-            "size": file_obj.size,
-            "modified": file_obj.modified_at.isoformat() if file_obj.modified_at else None,
-            "extension": file_obj.extension,
-            "mime_type": file_obj.mime_type,
-            "preview_type": file_obj.preview_type,
-            "has_thumbnail": file_obj.has_thumbnail,
-        })
+            # Check DB cache for metadata
+            db_file = db.get_file(rel_path)
+
+            if db_file is None:
+                # Lazy cache: index this file now
+                db_file = index_file_from_path(p)
+
+            files.append({
+                "name": db_file.filename,
+                "path": db_file.filepath,
+                "size": db_file.size,
+                "modified": db_file.modified_at.isoformat() if db_file.modified_at else None,
+                "extension": db_file.extension,
+                "mime_type": db_file.mime_type,
+                "preview_type": db_file.preview_type,
+                "has_thumbnail": db_file.has_thumbnail,
+            })
 
     # Build breadcrumbs
     crumbs = []
@@ -907,6 +963,67 @@ async def browse(
         "directories": directories,
         "files": files,
     }
+
+
+@app.post("/api/sync", tags=["Admin"])
+async def sync_database() -> Dict[str, Any]:
+    """
+    Synchronize database with filesystem.
+
+    Walks the entire upload directory and:
+    - Adds files that exist on disk but not in DB
+    - Updates files where size has changed (stale cache)
+    - Removes DB entries for files that no longer exist
+
+    Run via cron: 0 3 * * * curl -X POST http://localhost:8080/api/sync
+    """
+    added = 0
+    updated = 0
+    removed = 0
+
+    # Track all files found on filesystem
+    fs_files = set()
+
+    # Walk filesystem and sync to DB
+    for path in UPLOAD_ROOT.rglob('*'):
+        if path.is_file() and not path.name.startswith('.'):
+            rel_path = path.relative_to(UPLOAD_ROOT).as_posix()
+            fs_files.add(rel_path)
+
+            db_file = db.get_file(rel_path)
+
+            if db_file is None:
+                # New file - add to DB
+                index_file_from_path(path)
+                added += 1
+            else:
+                # Check if size changed (file was modified)
+                try:
+                    stat = path.stat()
+                    if db_file.size != stat.st_size:
+                        index_file_from_path(path)
+                        updated += 1
+                except OSError:
+                    pass  # File may have been deleted between rglob and stat
+
+    # Remove stale DB entries (files deleted from filesystem)
+    with db.get_session() as session:
+        from models import FileIndex
+        all_db_files = session.query(FileIndex).all()
+        for db_file in all_db_files:
+            if db_file.filepath not in fs_files:
+                session.delete(db_file)
+                removed += 1
+        session.commit()
+
+    return {
+        "ok": True,
+        "added": added,
+        "updated": updated,
+        "removed": removed,
+        "total_files": len(fs_files),
+    }
+
 
 @app.get("/api/file/{filepath:path}", tags=["Files"])
 async def get_file(

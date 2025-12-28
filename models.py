@@ -218,6 +218,22 @@ class DatabaseManager:
             ).order_by(FileIndex.filename).all()
             return [session.merge(r) for r in results]
 
+    def get_file(self, filepath: str) -> Optional[FileIndex]:
+        """
+        Get a single file by its filepath.
+
+        Args:
+            filepath: Relative path from upload root
+
+        Returns:
+            FileIndex object if found, None otherwise
+        """
+        with self.get_session() as session:
+            result = session.query(FileIndex).filter_by(filepath=filepath).first()
+            if result:
+                return session.merge(result)
+            return None
+
     def reindex_all(self, root_dir: str, progress_callback: Optional[Callable[[int, int], None]] = None) -> None:
         """
         Rebuild entire index by scanning the filesystem.

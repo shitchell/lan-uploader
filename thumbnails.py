@@ -129,3 +129,16 @@ class ThumbnailGenerator:
         cache_path = self._get_cache_path(source_path)
         if cache_path.exists():
             cache_path.unlink()
+
+    def get_cached(self, source_file: Path) -> Optional[Path]:
+        """
+        Return cached thumbnail path if it exists, None otherwise.
+
+        Args:
+            source_file: Path to the source image
+
+        Returns:
+            Path to cached thumbnail if exists, None otherwise
+        """
+        cache_path = self._get_cache_path(str(source_file.resolve()))
+        return cache_path if cache_path.exists() else None

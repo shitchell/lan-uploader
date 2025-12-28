@@ -724,6 +724,11 @@ body.select-mode .folder-item {
 /* .preview-content uses .flex-center class in HTML */
 .preview-content {
   min-height: 200px;
+  transition: opacity 0.15s ease-in-out;
+}
+
+.preview-modal-content {
+  transition: width 0.2s ease, height 0.2s ease;
 }
 
 .preview-content img,

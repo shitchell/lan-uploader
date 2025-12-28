@@ -69,6 +69,56 @@ export function closePreview() {
 }
 
 /**
+ * Update preview content with smooth fade transition (used for navigation)
+ * Unlike openPreview(), this doesn't show loading message or touch modal visibility
+ * @param {Object} file - File object to preview
+ */
+async function updatePreviewContent(file) {
+  const { filename, content } = getElements();
+
+  // Update state and filename
+  state.currentPreviewFile = file;
+  filename.textContent = file.name;
+
+  // Fade out current content
+  content.style.opacity = '0';
+
+  // Wait for fade out transition (150ms matches CSS transition duration)
+  await new Promise(resolve => setTimeout(resolve, 150));
+
+  // Generate new content based on file type
+  try {
+    if (file.preview_type === 'image') {
+      content.innerHTML = `<img src="${getFileUrl(file.path)}" alt="${escapeHtml(file.name)}">`;
+    } else if (file.preview_type === 'video') {
+      content.innerHTML = `<video controls src="${getFileUrl(file.path)}"></video>`;
+    } else if (file.preview_type === 'audio') {
+      content.innerHTML = `<audio controls src="${getFileUrl(file.path)}"></audio>`;
+    } else if (file.preview_type === 'text' || file.preview_type === 'code') {
+      const data = await fetchTextPreview(file.path);
+      const truncatedNote = data.truncated
+        ? `<p class="muted">(Showing first 1000 chars of ${formatFileSize(data.size)})</p>`
+        : '';
+      content.innerHTML = `<pre>${escapeHtml(data.content)}</pre>${truncatedNote}`;
+    } else {
+      content.innerHTML = `
+        <div class="muted">
+          <p>Preview not available for this file type</p>
+          <p>File: ${escapeHtml(file.name)}</p>
+          <p>Size: ${formatFileSize(file.size)}</p>
+          <p>Type: ${file.mime_type || 'unknown'}</p>
+        </div>
+      `;
+    }
+  } catch (error) {
+    content.innerHTML = `<p class="muted">Failed to load preview: ${error.message}</p>`;
+  }
+
+  // Fade in new content
+  content.style.opacity = '1';
+}
+
+/**
  * Get list of navigable files (files only, no directories) from the current grid
  * @returns {Array} Array of file objects from state.fileDataMap in DOM order
  */
@@ -106,7 +156,7 @@ export function navigatePreviewPrev() {
   }
 
   const prevFile = files[currentIndex - 1];
-  openPreview(prevFile);
+  updatePreviewContent(prevFile);
 }
 
 /**
@@ -123,7 +173,7 @@ export function navigatePreviewNext() {
   }
 
   const nextFile = files[currentIndex + 1];
-  openPreview(nextFile);
+  updatePreviewContent(nextFile);
 }
 
 export function downloadCurrentFile() {

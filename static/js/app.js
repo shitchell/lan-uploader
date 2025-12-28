@@ -6,6 +6,13 @@ let currentPreviewFile = null;
 let uploadWsClient = null; // WebSocket client for upload progress
 let wakeLock = null; // Wake Lock to keep screen on during upload
 
+// Pagination state for infinite scroll
+const PAGE_SIZE = 50;
+let currentOffset = 0;
+let hasMoreItems = false;
+let isLoadingMore = false;
+let infiniteScrollObserver = null;
+
 // ===== Wake Lock Helpers =====
 async function acquireWakeLock() {
   if ('wakeLock' in navigator) {
@@ -127,14 +134,36 @@ function hideStatus() {
 }
 
 // ===== Navigation =====
-async function navigateTo(path) {
+async function navigateTo(path, updateHash = true) {
   currentPath = path || '';
-  await loadDirectory(currentPath);
+
+  // Update URL hash for browser history (unless we're responding to a hash change)
+  if (updateHash) {
+    const newHash = currentPath ? encodeURIComponent(currentPath) : '';
+    if (window.location.hash.slice(1) !== newHash) {
+      window.location.hash = newHash;
+    }
+  }
+
+  // Reset pagination state for new directory
+  currentOffset = 0;
+  hasMoreItems = false;
+
+  await loadDirectory(currentPath, false);
 }
 
-async function loadDirectory(path) {
+async function loadDirectory(path, append = false) {
+  // Prevent duplicate requests while loading
+  if (isLoadingMore) return;
+
   try {
-    const params = new URLSearchParams({ path: path || '' });
+    isLoadingMore = true;
+
+    const params = new URLSearchParams({
+      path: path || '',
+      limit: PAGE_SIZE,
+      offset: append ? currentOffset : 0,
+    });
     const response = await fetch(`/api/browse?${params}`);
 
     if (!response.ok) {
@@ -142,10 +171,22 @@ async function loadDirectory(path) {
     }
 
     const data = await response.json();
-    renderBreadcrumbs(data.breadcrumbs);
-    renderFileGrid(data.directories, data.files);
+
+    // Update pagination state
+    const itemsReturned = data.directories.length + data.files.length;
+    currentOffset = append ? currentOffset + itemsReturned : itemsReturned;
+    hasMoreItems = data.has_more;
+
+    // Only update breadcrumbs on initial load (not when appending)
+    if (!append) {
+      renderBreadcrumbs(data.breadcrumbs);
+    }
+
+    renderFileGrid(data.directories, data.files, append);
   } catch (error) {
     showStatus('Failed to load directory: ' + error.message, 'error');
+  } finally {
+    isLoadingMore = false;
   }
 }
 
@@ -181,12 +222,17 @@ function renderBreadcrumbs(crumbs) {
   breadcrumbs.appendChild(newFolderButton);
 }
 
-function renderFileGrid(directories, files) {
-  fileGrid.innerHTML = '';
+function renderFileGrid(directories, files, append = false) {
+  // Clear grid only on initial load, not when appending
+  if (!append) {
+    fileGrid.innerHTML = '';
+  }
 
   const hasContent = directories.length > 0 || files.length > 0;
+  const hadContentBefore = fileGrid.children.length > 0;
 
-  if (!hasContent) {
+  // Show empty state only if no content and not appending to existing content
+  if (!hasContent && !hadContentBefore) {
     emptyState.classList.remove('hidden');
     return;
   } else {
@@ -908,4 +954,29 @@ document.addEventListener('keydown', (e) => {
 browserContent.className = `browser-content ${currentViewMode}-view`;
 viewIcon.textContent = currentViewMode === 'list' ? '⊞' : '☰';
 setupBrowserDragDrop();
-navigateTo(currentPath);
+
+// Set up IntersectionObserver for infinite scroll
+const loadSentinel = document.getElementById('load_sentinel');
+if (loadSentinel) {
+  infiniteScrollObserver = new IntersectionObserver((entries) => {
+    // Load more when sentinel becomes visible and there are more items
+    if (entries[0].isIntersecting && hasMoreItems && !isLoadingMore) {
+      loadDirectory(currentPath, true);
+    }
+  }, {
+    rootMargin: '200px', // Start loading 200px before sentinel is visible
+  });
+  infiniteScrollObserver.observe(loadSentinel);
+}
+
+// Handle browser back/forward navigation via URL hash
+window.addEventListener('hashchange', () => {
+  const hashPath = decodeURIComponent(window.location.hash.slice(1));
+  if (hashPath !== currentPath) {
+    navigateTo(hashPath, false); // Don't update hash again, we're responding to it
+  }
+});
+
+// Initialize from URL hash (or empty path for root)
+const initialPath = decodeURIComponent(window.location.hash.slice(1));
+navigateTo(initialPath, false);

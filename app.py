@@ -881,20 +881,28 @@ def index_file_from_path(path: Path) -> 'FileIndex':
 
 @app.get("/api/browse", tags=["Browse"])
 async def browse(
-    path: str = Query("", description="Directory path relative to upload root")
+    path: str = Query("", description="Directory path relative to upload root"),
+    limit: int = Query(50, ge=1, le=500, description="Maximum items to return"),
+    offset: int = Query(0, ge=0, description="Number of items to skip"),
 ) -> Dict[str, Any]:
     """
     List files and directories within a given path.
 
     Uses filesystem as source of truth for what exists, with DB as metadata cache.
     New files discovered on filesystem are automatically indexed (lazy caching).
+    Supports pagination via limit/offset for large directories.
 
     - **path**: Directory path (relative to upload root, default: root)
+    - **limit**: Maximum number of items to return (default: 50, max: 500)
+    - **offset**: Number of items to skip for pagination (default: 0)
 
     Returns:
     - breadcrumbs: Navigation breadcrumb trail
-    - directories: List of subdirectories with file counts
-    - files: List of files with metadata (from DB cache)
+    - directories: List of subdirectories with file counts (paginated)
+    - files: List of files with metadata (paginated)
+    - total_directories: Total number of directories in this path
+    - total_files: Total number of files in this path
+    - has_more: Whether more items are available
     """
     rel = path.strip().strip("/")
     base = (UPLOAD_ROOT / rel).resolve()
@@ -905,8 +913,9 @@ async def browse(
         raise HTTPException(status_code=404, detail="Path not found.")
 
     # Get directories and files from FILESYSTEM (source of truth for what exists)
-    directories = []
-    files = []
+    # First pass: collect all paths for counting and pagination
+    all_dir_paths = []
+    all_file_paths = []
 
     for p in sorted(base.iterdir()):
         # Skip hidden files/directories
@@ -914,6 +923,27 @@ async def browse(
             continue
 
         if p.is_dir():
+            all_dir_paths.append(p)
+        elif p.is_file():
+            all_file_paths.append(p)
+
+    # Calculate totals before pagination
+    total_directories = len(all_dir_paths)
+    total_files = len(all_file_paths)
+    total_items = total_directories + total_files
+
+    # Apply pagination: directories first, then files
+    # Determine which items to include based on offset and limit
+    directories = []
+    files = []
+    items_returned = 0
+
+    # Process directories (they come first in the listing)
+    dir_start = offset
+    dir_end = min(offset + limit, total_directories)
+
+    if dir_start < total_directories:
+        for p in all_dir_paths[dir_start:dir_end]:
             rp = p.resolve().relative_to(UPLOAD_ROOT).as_posix()
             # Count files directly from filesystem
             try:
@@ -925,7 +955,16 @@ async def browse(
                 "path": rp,
                 "file_count": file_count,
             })
-        elif p.is_file():
+            items_returned += 1
+
+    # Process files (after directories)
+    remaining_limit = limit - items_returned
+    if remaining_limit > 0:
+        # Calculate file offset: if we've passed all directories, adjust offset for files
+        file_offset = max(0, offset - total_directories)
+        file_end = min(file_offset + remaining_limit, total_files)
+
+        for p in all_file_paths[file_offset:file_end]:
             rel_path = p.relative_to(UPLOAD_ROOT).as_posix()
 
             # Check DB cache for metadata
@@ -945,6 +984,10 @@ async def browse(
                 "preview_type": db_file.preview_type,
                 "has_thumbnail": db_file.has_thumbnail,
             })
+            items_returned += 1
+
+    # Calculate if there are more items
+    has_more = (offset + items_returned) < total_items
 
     # Build breadcrumbs
     crumbs = []
@@ -962,6 +1005,9 @@ async def browse(
         "breadcrumbs": crumbs,
         "directories": directories,
         "files": files,
+        "total_directories": total_directories,
+        "total_files": total_files,
+        "has_more": has_more,
     }
 
 

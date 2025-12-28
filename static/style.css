@@ -292,6 +292,12 @@ button:active {
   gap: 10px;
 }
 
+/* Infinite scroll sentinel - invisible trigger element */
+.load-sentinel {
+  height: 1px;
+  width: 100%;
+}
+
 /* List View */
 .list-view .file-grid {
   grid-template-columns: 1fr;

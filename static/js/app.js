@@ -34,6 +34,7 @@ import {
   deleteFileDirectly,
   navigatePreviewPrev,
   navigatePreviewNext,
+  updateNavigationUI,
 } from './preview.js';
 import {
   performSearch,
@@ -245,6 +246,18 @@ clearFilesBtn.addEventListener('click', clearFiles);
 closePreviewBtn.addEventListener('click', closePreview);
 downloadFileBtn.addEventListener('click', downloadCurrentFile);
 deleteFileBtn.addEventListener('click', deleteCurrentFile);
+
+// Preview navigation buttons
+const previewNavPrev = document.getElementById('preview_nav_prev');
+const previewNavNext = document.getElementById('preview_nav_next');
+
+if (previewNavPrev) {
+  previewNavPrev.addEventListener('click', navigatePreviewPrev);
+}
+
+if (previewNavNext) {
+  previewNavNext.addEventListener('click', navigatePreviewNext);
+}
 
 // Search
 searchBtn.addEventListener('click', (e) => {

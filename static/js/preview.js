@@ -13,6 +13,9 @@ function getElements() {
       modal: document.getElementById('preview_modal'),
       filename: document.getElementById('preview_filename'),
       content: document.getElementById('preview_content'),
+      navPrev: document.getElementById('preview_nav_prev'),
+      navNext: document.getElementById('preview_nav_next'),
+      navIndex: document.getElementById('preview_nav_index'),
     };
   }
   return elements;
@@ -59,6 +62,9 @@ export async function openPreview(file) {
   } catch (error) {
     content.innerHTML = `<p class="muted">Failed to load preview: ${error.message}</p>`;
   }
+
+  // Update navigation UI after loading content
+  updateNavigationUI();
 }
 
 export function closePreview() {
@@ -116,6 +122,9 @@ async function updatePreviewContent(file) {
 
   // Fade in new content
   content.style.opacity = '1';
+
+  // Update navigation UI after loading content
+  updateNavigationUI();
 }
 
 /**
@@ -140,6 +149,25 @@ function getCurrentFileIndex() {
 
   const files = getNavigableFiles();
   return files.findIndex(file => file.path === state.currentPreviewFile.path);
+}
+
+/**
+ * Update the navigation bar UI (index display and button states)
+ */
+export function updateNavigationUI() {
+  const { navPrev, navNext, navIndex } = getElements();
+  if (!navPrev || !navNext || !navIndex) return;
+
+  const files = getNavigableFiles();
+  const currentIndex = getCurrentFileIndex();
+  const total = files.length;
+
+  // Update index display (1-based for user display)
+  navIndex.textContent = total > 0 ? `${currentIndex + 1}/${total}` : '0/0';
+
+  // Update button states
+  navPrev.disabled = currentIndex <= 0;
+  navNext.disabled = currentIndex === -1 || currentIndex >= total - 1;
 }
 
 /**

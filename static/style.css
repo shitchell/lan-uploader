@@ -751,6 +751,32 @@ body.select-mode .folder-item {
   color: var(--text-color);
 }
 
+/* Preview Navigation Bar */
+.preview-nav {
+  padding: 12px 20px;
+  gap: 16px;
+  border-top: 1px solid var(--border-light);
+}
+
+.preview-nav-btn {
+  padding: 6px 12px;
+  font-size: 18px;
+  min-width: 36px;
+}
+
+.preview-nav-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.preview-nav-index {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-color);
+  min-width: 60px;
+  text-align: center;
+}
+
 /* Search Results */
 .search-results {
   display: flex;

@@ -212,7 +212,12 @@ function renderBreadcrumbs(crumbs) {
     }
   });
 
-  // Add the "New Folder" button at the end
+  // Add separator and "New Folder" button at the end
+  const separator = document.createElement('span');
+  separator.className = 'separator';
+  separator.textContent = '›';
+  breadcrumbs.appendChild(separator);
+
   const newFolderButton = document.createElement('button');
   newFolderButton.id = 'new_folder_btn';
   newFolderButton.className = 'new-folder-btn';

@@ -4,6 +4,34 @@ let currentViewMode = localStorage.getItem('view_mode') || 'list'; // list or ga
 let storedFiles = [];
 let currentPreviewFile = null;
 let uploadWsClient = null; // WebSocket client for upload progress
+let wakeLock = null; // Wake Lock to keep screen on during upload
+
+// ===== Wake Lock Helpers =====
+async function acquireWakeLock() {
+  if ('wakeLock' in navigator) {
+    try {
+      wakeLock = await navigator.wakeLock.request('screen');
+      console.log('Wake Lock acquired');
+    } catch (err) {
+      console.warn('Wake Lock failed:', err);
+    }
+  }
+}
+
+async function releaseWakeLock() {
+  if (wakeLock) {
+    await wakeLock.release();
+    wakeLock = null;
+    console.log('Wake Lock released');
+  }
+}
+
+// Re-acquire Wake Lock when returning to tab (it gets released on visibility change)
+document.addEventListener('visibilitychange', async () => {
+  if (wakeLock !== null && document.visibilityState === 'visible') {
+    await acquireWakeLock();
+  }
+});
 
 // ===== DOM Elements =====
 // Header
@@ -190,6 +218,9 @@ function createFolderItem(dir) {
         <div class="item-name">${escapeHtml(dir.name)}</div>
         <div class="item-details">${dir.file_count} file(s)</div>
       </div>
+      <div class="item-actions">
+        <button class="action-btn" onclick="event.stopPropagation(); deleteFileDirectly('${escapeHtml(dir.path)}', '${escapeHtml(dir.name)}')">Delete</button>
+      </div>
     `;
   } else {
     item.innerHTML = `
@@ -346,6 +377,9 @@ async function performUpload() {
     const sessionId = await uploadWsClient.connect();
     console.log('Got session ID:', sessionId);
 
+    // Keep screen awake during upload
+    await acquireWakeLock();
+
     // Prepare form data
     const formData = new FormData();
     storedFiles.forEach(file => formData.append('files', file));
@@ -405,6 +439,9 @@ async function performUpload() {
       uploadWsClient.close();
       uploadWsClient = null;
     }
+
+    // Release Wake Lock
+    await releaseWakeLock();
   }
 }
 
@@ -443,6 +480,9 @@ function handleUploadError(data) {
     uploadWsClient.close();
     uploadWsClient = null;
   }
+
+  // Release Wake Lock
+  releaseWakeLock();
 }
 
 function handleUploadComplete(data) {
@@ -465,6 +505,9 @@ function handleUploadComplete(data) {
     uploadWsClient.close();
     uploadWsClient = null;
   }
+
+  // Release Wake Lock
+  releaseWakeLock();
 }
 
 // Legacy upload (no WebSocket) - fallback for browsers without WebSocket support
@@ -473,6 +516,9 @@ async function performUploadLegacy() {
     showStatus('No files selected', 'error');
     return;
   }
+
+  // Keep screen awake during upload
+  await acquireWakeLock();
 
   const formData = new FormData();
   storedFiles.forEach(file => formData.append('files', file));
@@ -494,6 +540,7 @@ async function performUploadLegacy() {
 
   xhr.addEventListener('load', () => {
     progressContainer.classList.add('hidden');
+    releaseWakeLock();
 
     if (xhr.status >= 200 && xhr.status < 300) {
       const data = JSON.parse(xhr.responseText);
@@ -507,6 +554,7 @@ async function performUploadLegacy() {
 
   xhr.addEventListener('error', () => {
     progressContainer.classList.add('hidden');
+    releaseWakeLock();
     showStatus('Upload failed: Network error', 'error');
   });
 

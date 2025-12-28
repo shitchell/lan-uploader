@@ -112,6 +112,8 @@ class DatabaseManager:
         Returns:
             The FileIndex object (new or updated)
         """
+        from sqlalchemy.orm import make_transient
+
         with self.get_session() as session:
             # Check if file already exists
             existing = session.query(FileIndex).filter_by(filepath=filepath).first()
@@ -127,6 +129,10 @@ class DatabaseManager:
                 existing.has_thumbnail = has_thumbnail
                 existing.preview_type = preview_type
                 session.commit()
+                # Refresh to load attributes after commit, then detach
+                session.refresh(existing)
+                session.expunge(existing)
+                make_transient(existing)
                 return existing
             else:
                 # Create new record
@@ -143,6 +149,10 @@ class DatabaseManager:
                 )
                 session.add(new_file)
                 session.commit()
+                # Refresh to load attributes after commit, then detach
+                session.refresh(new_file)
+                session.expunge(new_file)
+                make_transient(new_file)
                 return new_file
 
     def remove_file(self, filepath: str) -> bool:
@@ -195,12 +205,20 @@ class DatabaseManager:
         Returns:
             List of FileIndex objects matching the query
         """
+        from sqlalchemy.orm import make_transient
+
         with self.get_session() as session:
             results = session.query(FileIndex).filter(
                 FileIndex.filename.like(f'%{query}%')
             ).limit(limit).all()
-            # Detach from session
-            return [session.merge(r) for r in results]
+            # Refresh each result to load attributes, then detach
+            detached = []
+            for r in results:
+                session.refresh(r)
+                session.expunge(r)
+                make_transient(r)
+                detached.append(r)
+            return detached
 
     def list_files(self, parent_path: str = '') -> list[FileIndex]:
         """
@@ -212,11 +230,20 @@ class DatabaseManager:
         Returns:
             List of FileIndex objects in the directory
         """
+        from sqlalchemy.orm import make_transient
+
         with self.get_session() as session:
             results = session.query(FileIndex).filter_by(
                 parent_path=parent_path
             ).order_by(FileIndex.filename).all()
-            return [session.merge(r) for r in results]
+            # Refresh each result to load attributes, then detach
+            detached = []
+            for r in results:
+                session.refresh(r)
+                session.expunge(r)
+                make_transient(r)
+                detached.append(r)
+            return detached
 
     def get_file(self, filepath: str) -> Optional[FileIndex]:
         """
@@ -228,10 +255,16 @@ class DatabaseManager:
         Returns:
             FileIndex object if found, None otherwise
         """
+        from sqlalchemy.orm import make_transient
+
         with self.get_session() as session:
             result = session.query(FileIndex).filter_by(filepath=filepath).first()
             if result:
-                return session.merge(result)
+                # Refresh to load attributes, then detach
+                session.refresh(result)
+                session.expunge(result)
+                make_transient(result)
+                return result
             return None
 
     def reindex_all(self, root_dir: str, progress_callback: Optional[Callable[[int, int], None]] = None) -> None:

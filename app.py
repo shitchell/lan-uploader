@@ -946,9 +946,9 @@ async def browse(
     if dir_start < total_directories:
         for p in all_dir_paths[dir_start:dir_end]:
             rp = p.resolve().relative_to(UPLOAD_ROOT).as_posix()
-            # Count files directly from filesystem
+            # Count items (files and directories) directly from filesystem
             try:
-                file_count = sum(1 for f in p.iterdir() if f.is_file() and not f.name.startswith('.'))
+                file_count = sum(1 for f in p.iterdir() if not f.name.startswith('.'))
             except PermissionError:
                 file_count = 0
             directories.append({

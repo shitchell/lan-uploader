@@ -41,6 +41,21 @@ import {
 
 // ===== Wire up cross-module handlers =====
 
+// Check if any modal is currently visible
+function isAnyModalOpen() {
+  const previewModal = document.getElementById('preview_modal');
+  const uploadModal = document.getElementById('upload_modal');
+  const searchModal = document.getElementById('search_modal');
+  const newFolderModal = document.getElementById('new_folder_modal');
+
+  return (
+    !previewModal.classList.contains('hidden') ||
+    !uploadModal.classList.contains('hidden') ||
+    !searchModal.classList.contains('hidden') ||
+    !newFolderModal.classList.contains('hidden')
+  );
+}
+
 // Navigation needs to know how to open preview, new folder, and handle file actions
 setNavigationHandlers({
   openPreview,
@@ -239,7 +254,11 @@ document.addEventListener('click', (e) => {
   kebabMenu.classList.add('hidden');
   // Clear selection if click is not on a file-item or folder-item
   if (!e.target.closest('.file-item') && !e.target.closest('.folder-item')) {
-    clearSelection();
+    // Only clear selection if no modal is open AND click is not inside a modal
+    // (modal close buttons hide the modal before click bubbles here)
+    if (!isAnyModalOpen() && !e.target.closest('.modal')) {
+      clearSelection();
+    }
   }
 });
 
@@ -254,7 +273,10 @@ newFolderNameInput.addEventListener('keypress', (e) => {
 // Escape to close modals and clear selection
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
-    clearSelection();
+    // Only clear selection if no modal is currently open
+    if (!isAnyModalOpen()) {
+      clearSelection();
+    }
     hideContextMenu();
     const uploadModal = document.getElementById('upload_modal');
     const previewModal = document.getElementById('preview_modal');

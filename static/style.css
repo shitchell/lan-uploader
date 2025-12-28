@@ -120,8 +120,9 @@ body {
 /* Header */
 .app-header {
   background-color: var(--bg-secondary);
-  border-bottom: 1px solid var(--border-color);
   padding: var(--pad);
+  padding-bottom: 0;
+  border-bottom: 1px solid var(--border-color);
   position: sticky;
   top: 0;
   z-index: 100;
@@ -232,9 +233,9 @@ button:active {
 .breadcrumbs {
   display: flex;
   gap: 6px;
+  margin-top: 10px;
   padding: 10px var(--pad);
   background-color: var(--bg-tertiary);
-  border-bottom: 1px solid var(--border-light);
   flex-wrap: wrap;
   align-items: center;
 }

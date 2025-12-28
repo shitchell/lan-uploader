@@ -11,7 +11,8 @@ from argparse import Namespace
 
 import aiofiles
 from fastapi import FastAPI, UploadFile, File, Form, Query, Request, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
+from stream_zip import stream_zip, ZIP_AUTO
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from werkzeug.utils import secure_filename
@@ -1156,6 +1157,56 @@ async def delete_file(
     db.remove_directory(filepath)
 
     return {"ok": True, "message": "Directory deleted successfully."}
+
+
+@app.get("/api/download-dir/{dirpath:path}", tags=["Files"])
+async def download_directory(dirpath: str) -> StreamingResponse:
+    """
+    Download a directory as a streaming zip file.
+
+    Files are streamed directly without buffering the entire zip in memory,
+    making this suitable for large directories.
+
+    - **dirpath**: Directory path relative to upload root
+    """
+    dirpath = dirpath.strip().strip("/")
+    target = (UPLOAD_ROOT / dirpath).resolve()
+
+    if not within_root(target):
+        raise HTTPException(status_code=400, detail="Invalid directory path.")
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="Directory not found.")
+    if not target.is_dir():
+        raise HTTPException(status_code=400, detail="Path is not a directory.")
+
+    # Generate zip filename from directory name
+    zip_filename = f"{target.name}.zip" if target.name else "download.zip"
+
+    def iter_files():
+        """Yield files for streaming zip creation."""
+        for file_path in target.rglob('*'):
+            if file_path.is_file():
+                # Get path relative to the target directory
+                rel_path = file_path.relative_to(target)
+                modified_time = datetime.fromtimestamp(file_path.stat().st_mtime)
+                perms = 0o644
+
+                # Yield: (name, modified, perms, compression, file_chunks)
+                def file_chunks(fp=file_path):
+                    with open(fp, 'rb') as f:
+                        while chunk := f.read(65536):
+                            yield chunk
+
+                yield str(rel_path), modified_time, perms, ZIP_AUTO, file_chunks()
+
+    return StreamingResponse(
+        stream_zip(iter_files()),
+        media_type='application/zip',
+        headers={
+            'Content-Disposition': f'attachment; filename="{zip_filename}"'
+        }
+    )
+
 
 @app.post("/api/directory", tags=["Browse"])
 async def create_directory(

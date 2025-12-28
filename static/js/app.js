@@ -270,6 +270,7 @@ function createFolderItem(dir) {
         <div class="item-details">${dir.file_count} file(s)</div>
       </div>
       <div class="item-actions">
+        <button class="action-btn" onclick="event.stopPropagation(); downloadDirectoryDirectly('${escapeHtml(dir.path)}', '${escapeHtml(dir.name)}')">Download</button>
         <button class="action-btn" onclick="event.stopPropagation(); deleteFileDirectly('${escapeHtml(dir.path)}', '${escapeHtml(dir.name)}')">Delete</button>
       </div>
     `;
@@ -709,6 +710,10 @@ async function deleteFileWithForce(filepath) {
 // Direct download/delete (from list view buttons)
 function downloadFileDirectly(filepath, filename) {
   window.location.href = `/api/file/${filepath}?download=1`;
+}
+
+function downloadDirectoryDirectly(dirpath, dirname) {
+  window.location.href = `/api/download-dir/${dirpath}`;
 }
 
 async function deleteFileDirectly(filepath, filename) {

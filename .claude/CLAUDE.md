@@ -9,11 +9,11 @@ This project uses a hierarchical supervisor system for automated ticket implemen
 ```
 Human
   └─► Supervisor0 (top-level agent for ticket/implementation orchestration)
-        └─► claude --agent {workflow}-supervisor --dangerously-skip-permissions -p "ticket_dir: ..."
+        └─► claude --agent {workflow}-supervisor --dangerously-skip-permissions --prompt "ticket_dir: ..."
               │
               Supervisor1 (Claude Code agent in .claude/agents/)
               ├─► Ensures chunks/ directory exists for ticket
-              └─► claude --dangerously-skip-permissions -p "Read identity file..."
+              └─► claude --dangerously-skip-permissions --prompt "Read identity file..."
                     │
                     Supervisor2 (reads _work/identities/{workflow}/00_supervisor.md)
                     └─► Task(subagent_type="general-purpose") → Analyst/Developer/Tester/Validator
@@ -31,17 +31,19 @@ Human
 
 ### How to Launch a Supervisor
 
-Supervisor0 launches the appropriate supervisor for a ticket via Bash (NOT via Task tool):
+Supervisor0 launches the appropriate supervisor for a ticket via Bash (NOT via Task tool).
+
+**Important:** Unset `ANTHROPIC_API_KEY` and `CLAUDECODE` so sub-agents use the system key instead of the current session's key:
 
 ```bash
 # For features/enhancements
-claude --agent feature-supervisor --dangerously-skip-permissions -p "You are the feature-supervisor (Supervisor1). Your job is to oversee feature implementation for ticket_dir: _work/tickets/open/XXX-ticket-name"
+ANTHROPIC_API_KEY= CLAUDECODE= claude --agent feature-supervisor --dangerously-skip-permissions --prompt "You are the feature-supervisor (Supervisor1). Your job is to oversee feature implementation for ticket_dir: _work/tickets/open/XXX-ticket-name"
 
 # For bug fixes
-claude --agent bugfix-supervisor --dangerously-skip-permissions -p "You are the bugfix-supervisor (Supervisor1). Your job is to oversee bugfix implementation for ticket_dir: _work/tickets/open/XXX-ticket-name"
+ANTHROPIC_API_KEY= CLAUDECODE= claude --agent bugfix-supervisor --dangerously-skip-permissions --prompt "You are the bugfix-supervisor (Supervisor1). Your job is to oversee bugfix implementation for ticket_dir: _work/tickets/open/XXX-ticket-name"
 
 # For test coverage
-claude --agent test-coverage-supervisor --dangerously-skip-permissions -p "You are the test-coverage-supervisor (Supervisor1). Your job is to oversee test coverage implementation for ticket_dir: _work/tickets/open/XXX-ticket-name"
+ANTHROPIC_API_KEY= CLAUDECODE= claude --agent test-coverage-supervisor --dangerously-skip-permissions --prompt "You are the test-coverage-supervisor (Supervisor1). Your job is to oversee test coverage implementation for ticket_dir: _work/tickets/open/XXX-ticket-name"
 ```
 
 ### What Each Level Does
@@ -55,7 +57,7 @@ claude --agent test-coverage-supervisor --dangerously-skip-permissions -p "You a
 - Ensures `chunks/` directory exists in the ticket directory
 - If no chunks exist, creates `chunks/001/` and symlinks ticket docs into it
 - Reads identity file to discover required variables
-- Launches a chunk-level supervisor for each chunk via `claude --dangerously-skip-permissions -p "..."`
+- Launches a chunk-level supervisor for each chunk via `claude --dangerously-skip-permissions --prompt "..."`
 
 **Supervisor2 (Chunk Supervisor):**
 - Reads `_work/identities/{workflow}/00_supervisor.md` for workflow instructions
@@ -69,7 +71,7 @@ ALL work uses chunks. Even single-task tickets get a `chunks/001/` directory. Th
 ### Key Constraint
 
 **Tasks cannot spawn sub-Tasks.** Only top-level Claude instances have the Task tool. This is why:
-- Supervisor1 uses `claude --dangerously-skip-permissions -p` to launch Supervisor2
+- Supervisor1 uses `claude --dangerously-skip-permissions --prompt` to launch Supervisor2
 - Supervisor2 uses Task tool to dispatch individual agents
 
 ### Tickets Location

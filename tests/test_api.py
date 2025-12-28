@@ -488,6 +488,163 @@ class TestSearch:
         assert "extension" in result
         assert "mime_type" in result
 
+    # Directory search tests (Issue #013)
+
+    def test_search_finds_directories(self, client: TestClient, temp_upload_dir: Path):
+        """Test that directories appear in search results."""
+        # Create directory directly on filesystem
+        test_dir = temp_upload_dir / "test_folder"
+        test_dir.mkdir()
+
+        response = client.get("/api/search?q=test_folder")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["ok"] is True
+
+        # Find directory results
+        dir_results = [r for r in data["results"] if r.get("is_directory")]
+        assert len(dir_results) >= 1, "Expected at least one directory result"
+        assert dir_results[0]["name"] == "test_folder"
+        assert dir_results[0]["is_directory"] is True
+
+    def test_search_directory_has_required_fields(self, client: TestClient, temp_upload_dir: Path):
+        """Test that directory results have all required fields."""
+        # Create directory
+        my_folder = temp_upload_dir / "my_folder"
+        my_folder.mkdir()
+
+        response = client.get("/api/search?q=my_folder")
+        assert response.status_code == 200
+
+        data = response.json()
+        dir_results = [r for r in data["results"] if r.get("is_directory")]
+        assert len(dir_results) >= 1
+
+        result = dir_results[0]
+        assert "name" in result
+        assert "path" in result
+        assert "parent_path" in result
+        assert "is_directory" in result
+        assert result["is_directory"] is True
+
+    def test_search_file_has_is_directory_false(self, client: TestClient, uploaded_file_bytes: bytes):
+        """Test that file results include is_directory: False."""
+        # Upload a file
+        files = {"files": ("dir_test_file.txt", uploaded_file_bytes, "text/plain")}
+        client.post("/upload", files=files, data={"target_dir": ""})
+
+        response = client.get("/api/search?q=dir_test_file")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["count"] >= 1
+
+        # Find file results (not directory)
+        file_results = [r for r in data["results"] if not r.get("is_directory")]
+        assert len(file_results) >= 1
+        assert file_results[0]["is_directory"] is False
+
+    def test_search_returns_both_files_and_directories(self, client: TestClient, temp_upload_dir: Path, uploaded_file_bytes: bytes):
+        """Test that search returns both files and directories with same name prefix."""
+        # Create directory
+        documents_dir = temp_upload_dir / "documents"
+        documents_dir.mkdir()
+
+        # Upload file with similar name
+        files = {"files": ("documents.txt", uploaded_file_bytes, "text/plain")}
+        client.post("/upload", files=files, data={"target_dir": ""})
+
+        response = client.get("/api/search?q=documents")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["count"] >= 2, "Expected at least 2 results (directory + file)"
+
+        # Check for both directory and file
+        dir_results = [r for r in data["results"] if r.get("is_directory")]
+        file_results = [r for r in data["results"] if not r.get("is_directory")]
+
+        assert len(dir_results) >= 1, "Expected at least one directory result"
+        assert len(file_results) >= 1, "Expected at least one file result"
+        assert dir_results[0]["name"] == "documents"
+        assert dir_results[0]["is_directory"] is True
+        assert any(r["name"] == "documents.txt" for r in file_results)
+
+    def test_search_directories_first_then_files(self, client: TestClient, temp_upload_dir: Path, uploaded_file_bytes: bytes):
+        """Test that directories appear before files in search results."""
+        # Create directory
+        alpha_dir = temp_upload_dir / "alpha_dir"
+        alpha_dir.mkdir()
+
+        # Upload file
+        files = {"files": ("alpha_file.txt", uploaded_file_bytes, "text/plain")}
+        client.post("/upload", files=files, data={"target_dir": ""})
+
+        response = client.get("/api/search?q=alpha")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["count"] >= 2
+
+        # First result should be directory
+        assert data["results"][0]["is_directory"] is True
+        assert data["results"][0]["name"] == "alpha_dir"
+
+        # Second result should be file
+        assert data["results"][1]["is_directory"] is False
+        assert data["results"][1]["name"] == "alpha_file.txt"
+
+    def test_search_nested_directory(self, client: TestClient, temp_upload_dir: Path):
+        """Test that nested directories can be found with correct parent_path."""
+        # Create nested directory structure
+        parent_dir = temp_upload_dir / "parent"
+        parent_dir.mkdir()
+        child_dir = parent_dir / "child_folder"
+        child_dir.mkdir()
+
+        response = client.get("/api/search?q=child_folder")
+        assert response.status_code == 200
+
+        data = response.json()
+        dir_results = [r for r in data["results"] if r.get("is_directory")]
+        assert len(dir_results) >= 1
+
+        result = dir_results[0]
+        assert result["name"] == "child_folder"
+        assert result["parent_path"] == "parent"
+        assert result["path"] == "parent/child_folder"
+
+    def test_search_excludes_hidden_directories(self, client: TestClient, temp_upload_dir: Path):
+        """Test that hidden directories (starting with .) are not returned."""
+        # Create hidden directory
+        hidden_dir = temp_upload_dir / ".hidden_dir"
+        hidden_dir.mkdir()
+
+        response = client.get("/api/search?q=hidden")
+        assert response.status_code == 200
+
+        data = response.json()
+        # Should not find any directories with "hidden" that start with "."
+        dir_results = [r for r in data["results"] if r.get("is_directory")]
+        hidden_dirs = [r for r in dir_results if r["name"].startswith(".")]
+        assert len(hidden_dirs) == 0, "Hidden directories should not appear in search results"
+
+    def test_search_case_insensitive_directories(self, client: TestClient, temp_upload_dir: Path):
+        """Test that directory search is case-insensitive."""
+        # Create directory with mixed case
+        my_folder = temp_upload_dir / "MyFolder"
+        my_folder.mkdir()
+
+        # Search with lowercase
+        response = client.get("/api/search?q=myfolder")
+        assert response.status_code == 200
+
+        data = response.json()
+        dir_results = [r for r in data["results"] if r.get("is_directory")]
+        assert len(dir_results) >= 1
+        assert dir_results[0]["name"] == "MyFolder"
+
 
 class TestDeprecatedEndpoints:
     """Tests for deprecated API endpoints."""

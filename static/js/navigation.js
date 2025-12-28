@@ -2,7 +2,7 @@
 import { state } from './state.js';
 import { escapeHtml, getFileIcon, formatFileSize, showStatus } from './utils.js';
 import { fetchDirectory, getFileUrl, getThumbnailUrl, getDirectoryDownloadUrl } from './api.js';
-import { attachContextMenuEvents } from './context-menu.js';
+import { attachContextMenuEvents, attachSelectModeContextMenuEvents } from './context-menu.js';
 
 // DOM elements (cached on first use)
 let elements = null;
@@ -50,6 +50,146 @@ export function clearSelection() {
     state.selectedElement.classList.remove('selected');
     state.selectedElement = null;
   }
+}
+
+// Multi-selection functions for batch operations
+export function toggleItemSelection(path, itemData, element) {
+  if (state.selectedItems.has(path)) {
+    state.selectedItems.delete(path);
+    element.classList.remove('batch-selected');
+    const checkbox = element.querySelector('.item-checkbox');
+    if (checkbox) checkbox.checked = false;
+  } else {
+    state.selectedItems.set(path, { ...itemData, element });
+    element.classList.add('batch-selected');
+    const checkbox = element.querySelector('.item-checkbox');
+    if (checkbox) checkbox.checked = true;
+  }
+  state.lastSelectedPath = path;
+  updateSelectionCount();
+}
+
+export function selectItemRange(fromPath, toPath) {
+  // Get all items in the file grid
+  const { fileGrid } = getElements();
+  const items = Array.from(fileGrid.querySelectorAll('.file-item, .folder-item'));
+
+  // Find indices of from and to
+  let fromIndex = -1;
+  let toIndex = -1;
+
+  items.forEach((item, index) => {
+    const itemPath = item.dataset.path;
+    if (itemPath === fromPath) fromIndex = index;
+    if (itemPath === toPath) toIndex = index;
+  });
+
+  if (fromIndex === -1 || toIndex === -1) return;
+
+  // Normalize range
+  const start = Math.min(fromIndex, toIndex);
+  const end = Math.max(fromIndex, toIndex);
+
+  // Select all items in range
+  for (let i = start; i <= end; i++) {
+    const item = items[i];
+    const itemPath = item.dataset.path;
+    const isDirectory = item.classList.contains('folder-item');
+    const itemName = item.dataset.name;
+
+    if (!state.selectedItems.has(itemPath)) {
+      state.selectedItems.set(itemPath, {
+        path: itemPath,
+        name: itemName,
+        isDirectory,
+        element: item,
+      });
+      item.classList.add('batch-selected');
+      const checkbox = item.querySelector('.item-checkbox');
+      if (checkbox) checkbox.checked = true;
+    }
+  }
+
+  updateSelectionCount();
+}
+
+export function clearAllSelections() {
+  state.selectedItems.forEach(({ element }) => {
+    if (element) {
+      element.classList.remove('batch-selected');
+      const checkbox = element.querySelector('.item-checkbox');
+      if (checkbox) checkbox.checked = false;
+    }
+  });
+  state.selectedItems.clear();
+  state.lastSelectedPath = null;
+  updateSelectionCount();
+}
+
+export function updateSelectionCount() {
+  const countEl = document.getElementById('selection_count');
+  if (countEl) {
+    const count = state.selectedItems.size;
+    countEl.textContent = `${count} selected`;
+  }
+}
+
+export function enterSelectMode() {
+  state.selectMode = true;
+  document.body.classList.add('select-mode');
+
+  // Show selection bar
+  const selectionBar = document.getElementById('selection_bar');
+  if (selectionBar) selectionBar.classList.remove('hidden');
+
+  // Add checkboxes to existing items
+  const { fileGrid } = getElements();
+  const items = fileGrid.querySelectorAll('.file-item, .folder-item');
+  items.forEach(item => {
+    addCheckboxToItem(item);
+  });
+
+  updateSelectionCount();
+}
+
+export function exitSelectMode() {
+  state.selectMode = false;
+  document.body.classList.remove('select-mode');
+
+  // Hide selection bar
+  const selectionBar = document.getElementById('selection_bar');
+  if (selectionBar) selectionBar.classList.add('hidden');
+
+  // Clear all selections
+  clearAllSelections();
+
+  // Remove checkboxes from items
+  const { fileGrid } = getElements();
+  const checkboxes = fileGrid.querySelectorAll('.item-checkbox');
+  checkboxes.forEach(cb => cb.remove());
+}
+
+function addCheckboxToItem(item) {
+  // Don't add if already has checkbox
+  if (item.querySelector('.item-checkbox')) return;
+
+  const checkbox = document.createElement('input');
+  checkbox.type = 'checkbox';
+  checkbox.className = 'item-checkbox';
+  checkbox.checked = state.selectedItems.has(item.dataset.path);
+
+  // Prevent checkbox click from bubbling to item click handler
+  checkbox.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const path = item.dataset.path;
+    const isDirectory = item.classList.contains('folder-item');
+    const name = item.dataset.name;
+
+    toggleItemSelection(path, { path, name, isDirectory }, item);
+  });
+
+  // Insert at the beginning of the item
+  item.insertBefore(checkbox, item.firstChild);
 }
 
 export async function navigateTo(path, updateHash = true) {
@@ -170,7 +310,25 @@ function renderFileGrid(directories, files, append = false) {
 function createFolderItem(dir) {
   const item = document.createElement('div');
   item.className = 'folder-item card';
-  item.addEventListener('click', () => navigateTo(dir.path));
+  item.dataset.path = dir.path;
+  item.dataset.name = dir.name;
+
+  item.addEventListener('click', (e) => {
+    if (state.selectMode) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      // Handle Shift+click for range selection
+      if (e.shiftKey && state.lastSelectedPath) {
+        selectItemRange(state.lastSelectedPath, dir.path);
+      } else {
+        toggleItemSelection(dir.path, { path: dir.path, name: dir.name, isDirectory: true }, item);
+      }
+      return;
+    }
+
+    navigateTo(dir.path);
+  });
 
   if (state.currentViewMode === 'list') {
     item.innerHTML = `
@@ -202,11 +360,16 @@ function createFolderItem(dir) {
     `;
   }
 
-  attachContextMenuEvents(item, {
+  attachSelectModeContextMenuEvents(item, {
     path: dir.path,
     name: dir.name,
     isDirectory: true,
   });
+
+  // Add checkbox if already in select mode
+  if (state.selectMode) {
+    addCheckboxToItem(item);
+  }
 
   return item;
 }
@@ -214,7 +377,23 @@ function createFolderItem(dir) {
 function createFileItem(file) {
   const item = document.createElement('div');
   item.className = 'file-item card';
-  item.addEventListener('click', () => {
+  item.dataset.path = file.path;
+  item.dataset.name = file.name;
+
+  item.addEventListener('click', (e) => {
+    if (state.selectMode) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      // Handle Shift+click for range selection
+      if (e.shiftKey && state.lastSelectedPath) {
+        selectItemRange(state.lastSelectedPath, file.path);
+      } else {
+        toggleItemSelection(file.path, { path: file.path, name: file.name, isDirectory: false }, item);
+      }
+      return;
+    }
+
     selectItem(item);
     if (actionHandlers.openPreview) {
       actionHandlers.openPreview(file);
@@ -261,12 +440,17 @@ function createFileItem(file) {
     }
   }
 
-  attachContextMenuEvents(item, {
+  attachSelectModeContextMenuEvents(item, {
     path: file.path,
     name: file.name,
     isDirectory: false,
     preview_type: file.preview_type,
   });
+
+  // Add checkbox if already in select mode
+  if (state.selectMode) {
+    addCheckboxToItem(item);
+  }
 
   return item;
 }

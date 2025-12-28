@@ -23,6 +23,11 @@ export const state = {
   // Kebab overflow
   currentlyOverflowed: new Set(),
 
-  // Selection state
+  // Selection state (single-select for preview)
   selectedElement: null,
+
+  // Multi-selection state (batch operations)
+  selectMode: false,
+  selectedItems: new Map(), // path -> { path, name, isDirectory, element }
+  lastSelectedPath: null,
 };

@@ -1,8 +1,8 @@
 // Main entry point - wires together all modules
 import { state } from './state.js';
 import { showStatus } from './utils.js';
-import { createDirectory } from './api.js';
-import { setContextMenuHandlers, hideContextMenu } from './context-menu.js';
+import { createDirectory, batchDelete } from './api.js';
+import { setContextMenuHandlers, hideContextMenu, setEnterSelectModeCallback } from './context-menu.js';
 import {
   navigateTo,
   loadDirectory,
@@ -10,6 +10,9 @@ import {
   initBrowserView,
   setNavigationHandlers,
   clearSelection,
+  enterSelectMode,
+  exitSelectMode,
+  clearAllSelections,
 } from './navigation.js';
 import {
   openUploadModal,
@@ -79,6 +82,9 @@ setContextMenuHandlers({
   },
 });
 
+// Context menu long-press should enter select mode
+setEnterSelectModeCallback(() => enterSelectMode());
+
 // Preview needs to refresh after delete
 setFileDeletedHandler(() => loadDirectory(state.currentPath));
 
@@ -110,6 +116,9 @@ const searchCancelBtn = document.getElementById('search_cancel');
 const closeSearchBtn = document.getElementById('close_search_modal');
 
 const selectModeBtn = document.getElementById('select_mode_btn');
+const cancelSelectionBtn = document.getElementById('cancel_selection');
+const downloadSelectedBtn = document.getElementById('download_selected');
+const deleteSelectedBtn = document.getElementById('delete_selected');
 const kebabMenuBtn = document.getElementById('kebab_menu_btn');
 const kebabMenu = document.getElementById('kebab_menu');
 
@@ -262,6 +271,63 @@ document.addEventListener('click', (e) => {
   }
 });
 
+// Select mode
+selectModeBtn.addEventListener('click', () => {
+  if (state.selectMode) {
+    exitSelectMode();
+  } else {
+    enterSelectMode();
+  }
+});
+
+cancelSelectionBtn.addEventListener('click', () => {
+  exitSelectMode();
+});
+
+downloadSelectedBtn.addEventListener('click', () => {
+  // For now, download each selected item individually
+  // TODO: Could be enhanced to create a zip of all selected files
+  state.selectedItems.forEach((item) => {
+    if (item.isDirectory) {
+      downloadDirectoryDirectly(item.path);
+    } else {
+      downloadFileDirectly(item.path);
+    }
+  });
+  showStatus(`Downloading ${state.selectedItems.size} item(s)`, 'success', 2000);
+});
+
+deleteSelectedBtn.addEventListener('click', async () => {
+  const count = state.selectedItems.size;
+  if (count === 0) {
+    showStatus('No items selected', 'error', 2000);
+    return;
+  }
+
+  const confirmed = confirm(`Are you sure you want to delete ${count} item(s)?`);
+  if (!confirmed) return;
+
+  try {
+    const paths = Array.from(state.selectedItems.keys());
+    const result = await batchDelete(paths);
+
+    if (result.deleted > 0) {
+      showStatus(`Deleted ${result.deleted} item(s)`, 'success');
+    }
+
+    if (result.errors && result.errors.length > 0) {
+      console.error('Batch delete errors:', result.errors);
+      showStatus(`${result.errors.length} item(s) failed to delete`, 'error');
+    }
+
+    // Exit select mode and refresh
+    exitSelectMode();
+    loadDirectory(state.currentPath);
+  } catch (error) {
+    showStatus('Failed to delete items: ' + error.message, 'error');
+  }
+});
+
 // New folder
 closeNewFolderBtn.addEventListener('click', closeNewFolderModal);
 cancelNewFolderBtn.addEventListener('click', closeNewFolderModal);
@@ -270,9 +336,15 @@ newFolderNameInput.addEventListener('keypress', (e) => {
   if (e.key === 'Enter') performCreateFolder();
 });
 
-// Escape to close modals and clear selection
+// Escape to close modals, exit select mode, and clear selection
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
+    // Exit select mode first if active
+    if (state.selectMode) {
+      exitSelectMode();
+      return;
+    }
+
     // Only clear selection if no modal is currently open
     if (!isAnyModalOpen()) {
       clearSelection();

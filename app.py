@@ -1219,6 +1219,83 @@ async def delete_file(
     return {"ok": True, "message": "Directory deleted successfully."}
 
 
+@app.post("/api/batch-delete", tags=["Files"])
+async def batch_delete(request: Request) -> Dict[str, Any]:
+    """
+    Delete multiple files and/or directories in a single request.
+
+    Request body:
+    - **paths**: List of file/directory paths relative to upload root
+
+    Returns:
+    - deleted: Number of successfully deleted items
+    - errors: List of errors (path and error message)
+    """
+    try:
+        body = await request.json()
+        paths = body.get("paths", [])
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    if not paths:
+        raise HTTPException(status_code=400, detail="No paths provided")
+
+    if not isinstance(paths, list):
+        raise HTTPException(status_code=400, detail="Paths must be a list")
+
+    deleted = 0
+    errors = []
+
+    for filepath in paths:
+        if not isinstance(filepath, str):
+            errors.append({"path": str(filepath), "error": "Invalid path type"})
+            continue
+
+        filepath = filepath.strip().strip("/")
+
+        # CRITICAL: Prevent deletion of the upload root directory
+        if not filepath:
+            errors.append({"path": "", "error": "Cannot delete root directory"})
+            continue
+
+        target = (UPLOAD_ROOT / filepath).resolve()
+
+        # Additional safety check: ensure target is not the upload root
+        if target == UPLOAD_ROOT or target == UPLOAD_ROOT.resolve():
+            errors.append({"path": filepath, "error": "Cannot delete root directory"})
+            continue
+
+        if not within_root(target):
+            errors.append({"path": filepath, "error": "Invalid path"})
+            continue
+
+        if not target.exists():
+            errors.append({"path": filepath, "error": "File not found"})
+            continue
+
+        try:
+            if target.is_file():
+                target.unlink()
+                db.remove_file(filepath)
+                deleted += 1
+            elif target.is_dir():
+                # For batch delete, we force delete directories
+                shutil.rmtree(target)
+                db.remove_directory(filepath)
+                deleted += 1
+        except PermissionError:
+            errors.append({"path": filepath, "error": "Permission denied"})
+        except Exception as e:
+            errors.append({"path": filepath, "error": str(e)})
+
+    return {
+        "ok": True,
+        "deleted": deleted,
+        "errors": errors,
+        "message": f"Deleted {deleted} item(s)"
+    }
+
+
 @app.get("/api/download-dir/{dirpath:path}", tags=["Files"])
 async def download_directory(dirpath: str) -> StreamingResponse:
     """

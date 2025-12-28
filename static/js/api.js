@@ -49,6 +49,21 @@ export async function deleteFileForce(path) {
   return response.json();
 }
 
+export async function batchDelete(paths) {
+  const response = await fetch('/api/batch-delete', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ paths }),
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.detail || data.message || 'Batch delete failed');
+  }
+  return data;
+}
+
 export async function createDirectory(parentPath, name) {
   const params = new URLSearchParams({ path: parentPath, name });
   const response = await fetch(`/api/directory?${params}`, { method: 'POST' });

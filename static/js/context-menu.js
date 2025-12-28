@@ -1,6 +1,13 @@
 // Context menu (right-click / long-press)
 import { state } from './state.js';
 
+// Callback for entering select mode (set by app.js)
+let enterSelectModeCallback = null;
+
+export function setEnterSelectModeCallback(callback) {
+  enterSelectModeCallback = callback;
+}
+
 // Action handlers - set by app.js to avoid circular imports
 let actionHandlers = {
   download: null,
@@ -98,11 +105,29 @@ export function hideContextMenu() {
   }
 }
 
-function startLongPress(itemData, e) {
+function startLongPress(itemData, element, e) {
   state.longPressTimer = setTimeout(() => {
     e.preventDefault();
-    const touch = e.touches[0];
-    showContextMenu(itemData, touch.clientX, touch.clientY);
+
+    // On mobile (touch), long-press enters select mode instead of showing context menu
+    if (enterSelectModeCallback && !state.selectMode) {
+      enterSelectModeCallback();
+
+      // Also select the item that was long-pressed
+      // Import toggleItemSelection indirectly to avoid circular dependency
+      // We'll trigger click on the checkbox instead
+      setTimeout(() => {
+        const checkbox = element.querySelector('.item-checkbox');
+        if (checkbox) {
+          checkbox.checked = true;
+          checkbox.dispatchEvent(new Event('click', { bubbles: false }));
+        }
+      }, 50);
+    } else {
+      // If already in select mode, show context menu
+      const touch = e.touches[0];
+      showContextMenu(itemData, touch.clientX, touch.clientY);
+    }
   }, state.LONG_PRESS_DURATION);
 }
 
@@ -120,7 +145,24 @@ export function attachContextMenuEvents(element, itemData) {
   });
 
   element.addEventListener('touchstart', (e) => {
-    startLongPress(itemData, e);
+    startLongPress(itemData, element, e);
+  }, { passive: true });
+
+  element.addEventListener('touchend', cancelLongPress);
+  element.addEventListener('touchmove', cancelLongPress);
+  element.addEventListener('touchcancel', cancelLongPress);
+}
+
+// Alternative context menu that enters select mode on long-press
+export function attachSelectModeContextMenuEvents(element, itemData) {
+  element.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    // On desktop right-click, show context menu even in non-select mode
+    showContextMenu(itemData, e.clientX, e.clientY);
+  });
+
+  element.addEventListener('touchstart', (e) => {
+    startLongPress(itemData, element, e);
   }, { passive: true });
 
   element.addEventListener('touchend', cancelLongPress);

@@ -395,11 +395,50 @@ button:active {
   margin-top: 4px;
 }
 
-/* Selected state - works for both list and gallery view */
+/* Selected state - works for both list and gallery view (single-select for preview) */
 .file-item.selected,
 .folder-item.selected {
   outline: 2px solid var(--primary-color);
   outline-offset: 2px;
+}
+
+/* Batch selection state (multi-select mode) */
+.file-item.batch-selected,
+.folder-item.batch-selected {
+  background: var(--bg-highlight);
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+/* Checkbox for select mode */
+.item-checkbox {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  margin-right: 12px;
+  cursor: pointer;
+  accent-color: var(--primary-color);
+}
+
+/* In gallery view, position checkbox absolutely */
+.gallery-view .item-checkbox {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  margin-right: 0;
+  z-index: 10;
+}
+
+/* Make gallery items position relative for checkbox positioning */
+.gallery-view .file-item,
+.gallery-view .folder-item {
+  position: relative;
+}
+
+/* Select mode body class for global styling if needed */
+body.select-mode .file-item,
+body.select-mode .folder-item {
+  cursor: pointer;
 }
 
 /* Empty State */

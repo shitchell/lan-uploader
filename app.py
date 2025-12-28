@@ -710,7 +710,7 @@ async def upload_files(
             extension = dest.suffix.lower()
             mime_type, _ = mimetypes.guess_type(str(dest))
             preview_type, preview_method = get_preview_type(extension)
-            has_thumbnail = preview_type == 'image'
+            has_thumbnail = preview_type in ('image', 'video')
 
             filepath_rel = dest.relative_to(UPLOAD_ROOT).as_posix()
             parent_path_rel = target.relative_to(UPLOAD_ROOT).as_posix()
@@ -727,7 +727,7 @@ async def upload_files(
                 preview_type=preview_type,
             )
 
-            # Generate thumbnail in background (non-blocking) if image
+            # Generate thumbnail in background (non-blocking) if image or video
             if preview_type == 'image':
                 def _generate_thumbnail(path: Path) -> None:
                     try:
@@ -735,6 +735,13 @@ async def upload_files(
                     except Exception:
                         pass  # Thumbnail generation failure is not critical
                 asyncio.get_event_loop().run_in_executor(_thumbnail_executor, _generate_thumbnail, dest)
+            elif preview_type == 'video':
+                def _generate_video_thumbnail(path: Path) -> None:
+                    try:
+                        thumbnail_gen.generate_video_thumbnail(path)
+                    except Exception:
+                        pass  # Thumbnail generation failure is not critical
+                asyncio.get_event_loop().run_in_executor(_thumbnail_executor, _generate_video_thumbnail, dest)
 
             file_info = {
                 "filename": filename,
@@ -864,8 +871,8 @@ def index_file_from_path(path: Path) -> 'FileIndex':
     mime, _ = mimetypes.guess_type(path.name)
     preview_type, _ = get_preview_type(ext)
 
-    # Check if thumbnail actually exists in cache
-    has_thumb = preview_type == 'image' and thumbnail_gen.get_cached(path) is not None
+    # Check if thumbnail actually exists in cache (images and videos)
+    has_thumb = preview_type in ('image', 'video') and thumbnail_gen.get_cached(path) is not None
 
     return db.index_file(
         filepath=rel_path,
@@ -1013,7 +1020,9 @@ async def browse(
 
 
 @app.post("/api/sync", tags=["Admin"])
-async def sync_database() -> Dict[str, Any]:
+async def sync_database(
+    max_thumbnails: int = Query(100, ge=0, le=1000, description="Max thumbnails to generate per sync")
+) -> Dict[str, Any]:
     """
     Synchronize database with filesystem.
 
@@ -1021,19 +1030,22 @@ async def sync_database() -> Dict[str, Any]:
     - Adds files that exist on disk but not in DB
     - Updates files where size has changed (stale cache)
     - Removes DB entries for files that no longer exist
+    - Generates missing thumbnails for images and videos (up to max_thumbnails)
 
     Run via cron: 0 3 * * * curl -X POST http://localhost:8080/api/sync
     """
     added = 0
     updated = 0
     removed = 0
+    thumbnails_generated = 0
 
     # Track all files found on filesystem
     fs_files = set()
 
     # Walk filesystem and sync to DB
     for path in UPLOAD_ROOT.rglob('*'):
-        if path.is_file() and not path.name.startswith('.'):
+        # Skip hidden files and files in hidden directories (like .thumbnails)
+        if path.is_file() and not any(part.startswith('.') for part in path.relative_to(UPLOAD_ROOT).parts):
             rel_path = path.relative_to(UPLOAD_ROOT).as_posix()
             fs_files.add(rel_path)
 
@@ -1053,6 +1065,21 @@ async def sync_database() -> Dict[str, Any]:
                 except OSError:
                     pass  # File may have been deleted between rglob and stat
 
+            # Generate missing thumbnails (up to limit)
+            if thumbnails_generated < max_thumbnails:
+                ext = path.suffix.lower()
+                preview_type, _ = get_preview_type(ext)
+                if preview_type in ('image', 'video') and thumbnail_gen.get_cached(path) is None:
+                    try:
+                        if preview_type == 'image':
+                            result = thumbnail_gen.generate(path)
+                        else:
+                            result = thumbnail_gen.generate_video_thumbnail(path)
+                        if result:
+                            thumbnails_generated += 1
+                    except Exception:
+                        pass  # Thumbnail generation failure is not critical
+
     # Remove stale DB entries (files deleted from filesystem)
     with db.get_session() as session:
         from models import FileIndex
@@ -1069,6 +1096,7 @@ async def sync_database() -> Dict[str, Any]:
         "updated": updated,
         "removed": removed,
         "total_files": len(fs_files),
+        "thumbnails_generated": thumbnails_generated,
     }
 
 
@@ -1341,9 +1369,9 @@ async def search_files(
 @app.get("/api/thumbnail/{filepath:path}", tags=["Thumbnails"])
 async def get_thumbnail(filepath: str) -> FileResponse:
     """
-    Get or generate a thumbnail for an image file.
+    Get or generate a thumbnail for an image or video file.
 
-    - **filepath**: Image file path relative to upload root
+    - **filepath**: File path relative to upload root
 
     Returns JPEG thumbnail image.
     """
@@ -1357,14 +1385,16 @@ async def get_thumbnail(filepath: str) -> FileResponse:
     if not source_file.is_file():
         raise HTTPException(status_code=400, detail="Cannot generate thumbnail for directory.")
 
-    # Check if file is an image
+    # Check if file is an image or video
     extension = source_file.suffix.lower()
     preview_type, _ = get_preview_type(extension)
-    if preview_type != 'image':
-        raise HTTPException(status_code=400, detail="Thumbnails only available for images.")
+    if preview_type == 'image':
+        thumbnail_path = thumbnail_gen.generate(source_file)
+    elif preview_type == 'video':
+        thumbnail_path = thumbnail_gen.generate_video_thumbnail(source_file)
+    else:
+        raise HTTPException(status_code=400, detail="Thumbnails only available for images and videos.")
 
-    # Generate or retrieve thumbnail
-    thumbnail_path = thumbnail_gen.generate(source_file)
     if not thumbnail_path:
         raise HTTPException(status_code=500, detail="Failed to generate thumbnail.")
 

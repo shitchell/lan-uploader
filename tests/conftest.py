@@ -254,3 +254,86 @@ def mock_image_bytes() -> bytes:
     buffer = io.BytesIO()
     img.save(buffer, format='PNG')
     return buffer.getvalue()
+
+
+@pytest.fixture(scope="function")
+def sample_video_file(temp_upload_dir: Path) -> Path:
+    """
+    Create a sample video file (MP4) for testing.
+
+    Uses PyAV to create a simple test video with a few frames.
+
+    Args:
+        temp_upload_dir: Temporary upload directory
+
+    Returns:
+        Path: Path to the created sample video
+    """
+    try:
+        import av
+    except ImportError:
+        pytest.skip("PyAV not available for video tests")
+
+    from PIL import Image
+    import numpy as np
+
+    file_path = temp_upload_dir / "sample.mp4"
+
+    # Create a simple 3-frame video
+    container = av.open(str(file_path), mode='w')
+    stream = container.add_stream('mpeg4', rate=1)
+    stream.width = 100
+    stream.height = 100
+    stream.pix_fmt = 'yuv420p'
+
+    # Create 3 frames with different colors
+    colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255)]
+    for color in colors:
+        img = Image.new('RGB', (100, 100), color=color)
+        frame = av.VideoFrame.from_image(img)
+        for packet in stream.encode(frame):
+            container.mux(packet)
+
+    # Flush encoder
+    for packet in stream.encode():
+        container.mux(packet)
+
+    container.close()
+    return file_path
+
+
+@pytest.fixture
+def mock_video_bytes() -> bytes:
+    """
+    Provide sample video bytes for upload testing.
+
+    Returns:
+        bytes: Sample MP4 video as bytes
+    """
+    try:
+        import av
+    except ImportError:
+        pytest.skip("PyAV not available for video tests")
+
+    from PIL import Image
+    import io
+
+    buffer = io.BytesIO()
+    container = av.open(buffer, mode='w', format='mp4')
+    stream = container.add_stream('mpeg4', rate=1)
+    stream.width = 50
+    stream.height = 50
+    stream.pix_fmt = 'yuv420p'
+
+    # Create 2 frames
+    for color in [(255, 0, 0), (0, 0, 255)]:
+        img = Image.new('RGB', (50, 50), color=color)
+        frame = av.VideoFrame.from_image(img)
+        for packet in stream.encode(frame):
+            container.mux(packet)
+
+    for packet in stream.encode():
+        container.mux(packet)
+
+    container.close()
+    return buffer.getvalue()

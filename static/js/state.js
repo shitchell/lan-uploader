@@ -7,6 +7,9 @@ export const state = {
   uploadWsClient: null,
   wakeLock: null,
 
+  // Map of file path -> full file object (for preview navigation)
+  fileDataMap: new Map(),
+
   // Pagination for infinite scroll
   PAGE_SIZE: 50,
   currentOffset: 0,

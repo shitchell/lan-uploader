@@ -230,6 +230,9 @@ export async function navigateTo(path, updateHash = true) {
   state.currentOffset = 0;
   state.hasMoreItems = false;
 
+  // Clear file data map when changing directories
+  state.fileDataMap.clear();
+
   await loadDirectory(state.currentPath, false);
 }
 
@@ -325,6 +328,8 @@ function renderFileGrid(directories, files, append = false) {
   });
 
   files.forEach(file => {
+    // Store file data for preview navigation
+    state.fileDataMap.set(file.path, file);
     fileGrid.appendChild(createFileItem(file));
   });
 }

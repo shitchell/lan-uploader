@@ -68,6 +68,64 @@ export function closePreview() {
   content.innerHTML = '';
 }
 
+/**
+ * Get list of navigable files (files only, no directories) from the current grid
+ * @returns {Array} Array of file objects from state.fileDataMap in DOM order
+ */
+function getNavigableFiles() {
+  const fileGrid = document.getElementById('file_grid');
+  const fileItems = fileGrid.querySelectorAll('.file-item');
+
+  return Array.from(fileItems)
+    .map(item => state.fileDataMap.get(item.dataset.path))
+    .filter(file => file !== undefined);
+}
+
+/**
+ * Get the index of the current preview file in the navigable files array
+ * @returns {number} Index of current file, or -1 if not found
+ */
+function getCurrentFileIndex() {
+  if (!state.currentPreviewFile) return -1;
+
+  const files = getNavigableFiles();
+  return files.findIndex(file => file.path === state.currentPreviewFile.path);
+}
+
+/**
+ * Navigate to the previous file in the preview modal
+ * Stops at the first file (no wrap-around)
+ */
+export function navigatePreviewPrev() {
+  const files = getNavigableFiles();
+  const currentIndex = getCurrentFileIndex();
+
+  if (currentIndex <= 0) {
+    // Already at the first file or not found
+    return;
+  }
+
+  const prevFile = files[currentIndex - 1];
+  openPreview(prevFile);
+}
+
+/**
+ * Navigate to the next file in the preview modal
+ * Stops at the last file (no wrap-around)
+ */
+export function navigatePreviewNext() {
+  const files = getNavigableFiles();
+  const currentIndex = getCurrentFileIndex();
+
+  if (currentIndex === -1 || currentIndex >= files.length - 1) {
+    // At the last file or not found
+    return;
+  }
+
+  const nextFile = files[currentIndex + 1];
+  openPreview(nextFile);
+}
+
 export function downloadCurrentFile() {
   if (state.currentPreviewFile) {
     window.location.href = getFileUrl(state.currentPreviewFile.path, true);

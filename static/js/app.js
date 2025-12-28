@@ -32,6 +32,8 @@ import {
   downloadFileDirectly,
   downloadDirectoryDirectly,
   deleteFileDirectly,
+  navigatePreviewPrev,
+  navigatePreviewNext,
 } from './preview.js';
 import {
   performSearch,
@@ -339,6 +341,7 @@ newFolderNameInput.addEventListener('keypress', (e) => {
 });
 
 // Escape to close modals, exit select mode, and clear selection
+// Arrow keys to navigate preview modal
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     // Exit select mode first if active
@@ -360,6 +363,23 @@ document.addEventListener('keydown', (e) => {
     if (!previewModal.classList.contains('hidden')) closePreview();
     if (!searchModal.classList.contains('hidden')) closeSearchModal();
     if (!newFolderModal.classList.contains('hidden')) closeNewFolderModal();
+  }
+
+  // Arrow key navigation in preview modal
+  if (e.key === 'ArrowLeft') {
+    const previewModal = document.getElementById('preview_modal');
+    if (!previewModal.classList.contains('hidden')) {
+      e.preventDefault();
+      navigatePreviewPrev();
+    }
+  }
+
+  if (e.key === 'ArrowRight') {
+    const previewModal = document.getElementById('preview_modal');
+    if (!previewModal.classList.contains('hidden')) {
+      e.preventDefault();
+      navigatePreviewNext();
+    }
   }
 });
 

@@ -93,8 +93,14 @@ setEnterSelectModeCallback(() => enterSelectMode());
 setUploadCompleteHandler(() => loadDirectory(state.currentPath));
 
 // Search needs to navigate and open preview on result click
-setSearchResultHandler((file) => {
-  navigateTo(file.parent_path).then(() => openPreview(file));
+setSearchResultHandler((result) => {
+  if (result.is_directory) {
+    // Directory: navigate directly to it
+    navigateTo(result.path);
+  } else {
+    // File: navigate to parent and open preview
+    navigateTo(result.parent_path).then(() => openPreview(result));
+  }
 });
 
 // ===== DOM Elements =====

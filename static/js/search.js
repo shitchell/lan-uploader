@@ -57,24 +57,36 @@ function showSearchResults(query, results) {
     resultsContainer.classList.remove('hidden');
     noResults.classList.add('hidden');
 
-    results.forEach(file => {
+    results.forEach(result => {
       const item = document.createElement('div');
       item.className = 'search-result-item card';
 
-      const icon = getFileIcon(file.preview_type);
+      // Use folder icon for directories, file icon for files
+      const icon = result.is_directory ? '\ud83d\udcc1' : getFileIcon(result.preview_type);
 
-      item.innerHTML = `
-        <div class="search-result-icon">${icon}</div>
-        <div class="search-result-info">
-          <div class="search-result-name">${escapeHtml(file.name)}</div>
-          <div class="search-result-path text-sm">/${escapeHtml(file.parent_path)}</div>
-        </div>
-      `;
+      // Build result HTML - directories show just name/path, files show size/extension
+      if (result.is_directory) {
+        item.innerHTML = `
+          <div class="search-result-icon">${icon}</div>
+          <div class="search-result-info">
+            <div class="search-result-name">${escapeHtml(result.name)}</div>
+            <div class="search-result-path text-sm">/${escapeHtml(result.path)}</div>
+          </div>
+        `;
+      } else {
+        item.innerHTML = `
+          <div class="search-result-icon">${icon}</div>
+          <div class="search-result-info">
+            <div class="search-result-name">${escapeHtml(result.name)}</div>
+            <div class="search-result-path text-sm">/${escapeHtml(result.parent_path)}</div>
+          </div>
+        `;
+      }
 
       item.addEventListener('click', () => {
         modal.classList.add('hidden');
         if (onResultClick) {
-          onResultClick(file);
+          onResultClick(result);
         }
       });
 

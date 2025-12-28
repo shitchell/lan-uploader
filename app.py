@@ -1411,20 +1411,34 @@ async def search_files(
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of results")
 ) -> Dict[str, Any]:
     """
-    Search for files by filename.
+    Search for files and directories by name.
 
-    - **q**: Search query (searches filename)
+    - **q**: Search query (searches filename and directory name)
     - **limit**: Maximum number of results (default: 100, max: 1000)
 
-    Returns list of matching files with full metadata.
+    Returns list of matching files and directories with metadata.
+    Directories are returned first, followed by files, both sorted by name.
     """
-    # Search database
-    results = db.search(q, limit=limit)
+    query_lower = q.lower()
+    results = []
 
-    # Format results
-    files = []
-    for file_obj in results:
-        files.append({
+    # Search directories from filesystem
+    for path in UPLOAD_ROOT.rglob('*'):
+        if path.is_dir() and not any(part.startswith('.') for part in path.relative_to(UPLOAD_ROOT).parts):
+            if query_lower in path.name.lower():
+                rel_path = path.relative_to(UPLOAD_ROOT).as_posix()
+                parent = path.parent.relative_to(UPLOAD_ROOT).as_posix() if path.parent != UPLOAD_ROOT else ""
+                results.append({
+                    "name": path.name,
+                    "path": rel_path,
+                    "parent_path": parent,
+                    "is_directory": True,
+                })
+
+    # Search files from database
+    file_results = db.search(q, limit=limit)
+    for file_obj in file_results:
+        results.append({
             "name": file_obj.filename,
             "path": file_obj.filepath,
             "parent_path": file_obj.parent_path,
@@ -1434,13 +1448,20 @@ async def search_files(
             "mime_type": file_obj.mime_type,
             "preview_type": file_obj.preview_type,
             "has_thumbnail": file_obj.has_thumbnail,
+            "is_directory": False,
         })
+
+    # Sort: directories first, then by name
+    results.sort(key=lambda x: (not x["is_directory"], x["name"].lower()))
+
+    # Apply limit after combining
+    results = results[:limit]
 
     return {
         "ok": True,
         "query": q,
-        "count": len(files),
-        "results": files,
+        "count": len(results),
+        "results": results,
     }
 
 @app.get("/api/thumbnail/{filepath:path}", tags=["Thumbnails"])

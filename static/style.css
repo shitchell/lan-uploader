@@ -235,7 +235,7 @@ button:active {
   gap: 6px;
   padding: 10px var(--pad);
   flex-wrap: wrap;
-  align-items: center;
+  align-items: baseline;
 }
 
 .breadcrumbs a {

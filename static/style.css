@@ -1,106 +1,6 @@
-:root {
-  --pad: 14px;
-
-  /* Light mode colors (default) */
-  --bg-color: #ffffff;
-  --text-color: #000000;
-  --text-muted: #666666;
-  --border-color: #cccccc;
-  --border-light: #eeeeee;
-
-  /* Interactive elements */
-  --primary-color: #2d7ef7;
-  --primary-hover: #1e6de5;
-
-  /* Backgrounds */
-  --bg-secondary: #f2f2f2;
-  --bg-tertiary: #fafafa;
-  --bg-highlight: #f4f7ff;
-
-  /* Dropzone */
-  --dropzone-border: #999999;
-  --dropzone-text: #555555;
-  --dropzone-hover-bg: #f4f7ff;
-  --dropzone-hover-border: #2d7ef7;
-  --dropzone-hover-text: #2d7ef7;
-
-  /* Status colors */
-  --success-color: #0a7a28;
-  --error-color: #a40000;
-  --warning-color: #e67700;
-
-  /* Pill/badge */
-  --pill-bg: #eef0f7;
-  --pill-text: #4a4d57;
-
-  /* File remove button */
-  --remove-bg: #f44336;
-  --remove-hover: #d32f2f;
-
-  /* Input fields */
-  --input-bg: #ffffff;
-  --input-border: #cccccc;
-  --input-text: #000000;
-
-  /* Modal */
-  --modal-overlay: rgba(0, 0, 0, 0.5);
-  --modal-bg: #ffffff;
-
-  /* Hover states */
-  --item-hover: #f4f7ff;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    /* Dark mode colors */
-    --bg-color: #1a1a1a;
-    --text-color: #e0e0e0;
-    --text-muted: #a0a0a0;
-    --border-color: #404040;
-    --border-light: #333333;
-
-    /* Interactive elements */
-    --primary-color: #4a9eff;
-    --primary-hover: #6ab0ff;
-
-    /* Backgrounds */
-    --bg-secondary: #2a2a2a;
-    --bg-tertiary: #252525;
-    --bg-highlight: #1e2a3a;
-
-    /* Dropzone */
-    --dropzone-border: #666666;
-    --dropzone-text: #a0a0a0;
-    --dropzone-hover-bg: #1e2a3a;
-    --dropzone-hover-border: #4a9eff;
-    --dropzone-hover-text: #4a9eff;
-
-    /* Status colors */
-    --success-color: #4ade80;
-    --error-color: #ef4444;
-    --warning-color: #fb923c;
-
-    /* Pill/badge */
-    --pill-bg: #2a2a2a;
-    --pill-text: #a0a0a0;
-
-    /* File remove button */
-    --remove-bg: #dc2626;
-    --remove-hover: #b91c1c;
-
-    /* Input fields */
-    --input-bg: #252525;
-    --input-border: #404040;
-    --input-text: #e0e0e0;
-
-    /* Modal */
-    --modal-overlay: rgba(0, 0, 0, 0.7);
-    --modal-bg: #1a1a1a;
-
-    /* Hover states */
-    --item-hover: #1e2a3a;
-  }
-}
+/* ==========================================================================
+   Base Styles
+   ========================================================================== */
 
 * {
   box-sizing: border-box;
@@ -131,10 +31,9 @@ body {
   gap: 10px;
 }
 
+/* .header-actions uses .flex-row class in HTML */
 .header-actions {
-  display: flex;
   gap: 8px;
-  align-items: center;
   position: relative;
 }
 
@@ -190,7 +89,11 @@ body {
   flex-shrink: 0;
 }
 
-/* Buttons */
+/* ==========================================================================
+   Buttons - Base and Variants
+   ========================================================================== */
+
+/* Base button reset */
 button, .btn {
   padding: 8px 14px;
   font-size: 14px;
@@ -202,6 +105,11 @@ button, .btn {
   transition: all 0.2s;
 }
 
+button:active {
+  filter: brightness(0.93);
+}
+
+/* Button color variants */
 .primary-btn {
   background: var(--primary-color);
   color: white;
@@ -211,13 +119,15 @@ button, .btn {
   background: var(--primary-hover);
 }
 
-.secondary-btn {
+.secondary-btn,
+.icon-btn {
   background: var(--bg-secondary);
   color: var(--text-color);
   border: 1px solid var(--border-color);
 }
 
-.secondary-btn:hover {
+.secondary-btn:hover,
+.icon-btn:hover {
   background: var(--bg-tertiary);
 }
 
@@ -228,18 +138,6 @@ button, .btn {
 
 .danger-btn:hover {
   background: var(--remove-hover);
-}
-
-.icon-btn {
-  background: var(--bg-secondary);
-  color: var(--text-color);
-  padding: 8px 12px;
-  font-size: 18px;
-  border: 1px solid var(--border-color);
-}
-
-.icon-btn:hover {
-  background: var(--bg-tertiary);
 }
 
 .text-btn {
@@ -253,12 +151,57 @@ button, .btn {
   text-decoration: underline;
 }
 
-button:active {
-  filter: brightness(0.93);
+/* Button size variants */
+.icon-btn {
+  padding: 8px 12px;
+  font-size: 18px;
 }
 
+.btn-sm {
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: 6px;
+}
+
+.btn-xs {
+  padding: 4px 8px;
+  font-size: 11px;
+  border-radius: 4px;
+}
+
+/* Utility: icon inside button */
 .btn-icon {
   font-size: 16px;
+}
+
+/* Menu item - shared by context menu and kebab menu */
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  text-align: left;
+  font-size: 14px;
+  color: var(--text-color);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.menu-item:hover {
+  background: var(--item-hover);
+}
+
+.menu-item.danger {
+  color: var(--error-color);
+}
+
+.menu-item.danger:hover {
+  background: var(--error-color);
+  color: white;
 }
 
 /* Breadcrumbs */
@@ -297,20 +240,12 @@ button:active {
   margin-left: 10px;
 }
 
+/* Extends .primary-btn with smaller size for breadcrumbs */
 .new-folder-btn {
   direction: ltr;
   padding: 4px 12px;
   font-size: 13px;
-  background: var(--primary-color);
-  color: white;
-  border: none;
   border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.new-folder-btn:hover {
-  background: var(--primary-hover);
 }
 
 #new_folder_name {
@@ -362,22 +297,14 @@ button:active {
   grid-template-columns: 1fr;
 }
 
+/* List view items extend .card with slight modifications */
 .list-view .file-item,
 .list-view .folder-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px;
-  border: 1px solid var(--border-light);
-  border-radius: 10px;
-  background: var(--bg-tertiary);
-  cursor: pointer;
-  transition: all 0.2s;
+  border-radius: 10px; /* slightly larger than base .card */
 }
 
 .list-view .file-item:hover,
 .list-view .folder-item:hover {
-  background: var(--item-hover);
   transform: translateX(2px);
 }
 
@@ -391,22 +318,19 @@ button:active {
   min-width: 0;
 }
 
+/* .item-name uses .truncate class in HTML */
 .list-view .item-name {
   font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   color: var(--text-color);
 }
 
+/* .item-details uses .text-sm class in HTML */
 .list-view .item-details {
-  font-size: 12px;
-  color: var(--text-muted);
   margin-top: 2px;
 }
 
+/* .item-actions uses .flex-row class in HTML */
 .list-view .item-actions {
-  display: flex;
   gap: 6px;
   opacity: 0;
   transition: opacity 0.2s;
@@ -417,15 +341,7 @@ button:active {
   opacity: 1;
 }
 
-.list-view .action-btn {
-  padding: 6px 10px;
-  font-size: 12px;
-  background: var(--bg-secondary);
-  color: var(--text-color);
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-}
-
+/* Action buttons use .btn-sm .secondary-btn base, with primary hover */
 .list-view .action-btn:hover {
   background: var(--primary-color);
   color: white;
@@ -437,23 +353,17 @@ button:active {
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
 }
 
+/* Gallery view items extend .card with column layout */
 .gallery-view .file-item,
 .gallery-view .folder-item {
-  display: flex;
   flex-direction: column;
-  align-items: center;
   padding: 16px;
-  border: 1px solid var(--border-light);
   border-radius: 10px;
-  background: var(--bg-tertiary);
-  cursor: pointer;
-  transition: all 0.2s;
   text-align: center;
 }
 
 .gallery-view .file-item:hover,
 .gallery-view .folder-item:hover {
-  background: var(--item-hover);
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
@@ -471,19 +381,17 @@ button:active {
   margin-bottom: 8px;
 }
 
+/* .item-name uses .truncate class in HTML */
 .gallery-view .item-name {
   font-size: 13px;
   font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   width: 100%;
   color: var(--text-color);
 }
 
+/* .item-details uses .text-sm class in HTML */
 .gallery-view .item-details {
-  font-size: 11px;
-  color: var(--text-muted);
+  font-size: 11px; /* slightly smaller than .text-sm */
   margin-top: 4px;
 }
 
@@ -555,10 +463,8 @@ button:active {
   max-width: 900px;
 }
 
+/* .modal-header uses .flex-between class in HTML */
 .modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
   padding: 16px 20px;
   border-bottom: 1px solid var(--border-light);
 }
@@ -569,6 +475,7 @@ button:active {
   color: var(--text-color);
 }
 
+/* .close-btn uses .flex-center class in HTML */
 .close-btn {
   background: transparent;
   border: none;
@@ -578,9 +485,6 @@ button:active {
   padding: 0;
   width: 32px;
   height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   border-radius: 6px;
 }
 
@@ -595,8 +499,8 @@ button:active {
   flex: 1;
 }
 
+/* .modal-footer uses .flex-row class in HTML */
 .modal-footer {
-  display: flex;
   justify-content: flex-end;
   gap: 10px;
   padding: 16px 20px;
@@ -643,57 +547,39 @@ button:active {
   background-color: var(--bg-tertiary);
 }
 
+/* .preview-header uses .flex-between class in HTML */
 .preview-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
   margin-bottom: 8px;
 }
 
+/* .file-list uses .flex-col class in HTML */
 .file-list {
-  display: flex;
-  flex-direction: column;
   gap: 6px;
 }
 
+/* .file-item in upload modal uses .flex-between class */
 .file-list .file-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
   padding: 8px;
   background: var(--bg-secondary);
   border-radius: 6px;
   font-size: 13px;
 }
 
+/* .file-name uses .truncate class in HTML */
 .file-name {
   flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   color: var(--text-color);
 }
 
+/* .file-size uses .text-sm class in HTML */
 .file-size {
-  color: var(--text-muted);
-  font-size: 12px;
   margin-left: 10px;
   white-space: nowrap;
 }
 
+/* Uses .btn-xs .danger-btn base */
 .file-remove {
-  background: var(--remove-bg);
-  color: white;
-  border: none;
-  border-radius: 4px;
-  padding: 4px 8px;
-  font-size: 11px;
-  cursor: pointer;
   margin-left: 8px;
-}
-
-.file-remove:hover {
-  background: var(--remove-hover);
 }
 
 /* Progress bar */
@@ -733,12 +619,9 @@ button:active {
   text-overflow: ellipsis;
 }
 
-/* Preview Content */
+/* .preview-content uses .flex-center class in HTML */
 .preview-content {
   min-height: 200px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .preview-content img,
@@ -766,21 +649,7 @@ button:active {
   gap: 8px;
 }
 
-.search-result-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px;
-  border: 1px solid var(--border-light);
-  border-radius: 8px;
-  background: var(--bg-tertiary);
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.search-result-item:hover {
-  background: var(--item-hover);
-}
+/* .search-result-item uses .card class in HTML */
 
 .search-result-icon {
   font-size: 24px;
@@ -797,53 +666,34 @@ button:active {
   color: var(--text-color);
 }
 
+/* .search-result-path uses .text-sm class in HTML */
 .search-result-path {
-  font-size: 12px;
-  color: var(--text-muted);
   margin-top: 2px;
 }
 
-/* Context Menu */
-.context-menu {
-  position: fixed;
+/* ==========================================================================
+   Dropdown Menus - Context menu and Kebab menu share base styles
+   ========================================================================== */
+
+/* Shared dropdown container */
+.context-menu,
+.kebab-menu {
   background: var(--modal-bg);
   border: 1px solid var(--border-color);
   border-radius: 8px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-  z-index: 1001;
   min-width: 140px;
   padding: 4px 0;
+  z-index: 1001;
+}
+
+/* Context menu positioning */
+.context-menu {
+  position: fixed;
   overflow: hidden;
 }
 
-.context-menu-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  cursor: pointer;
-  font-size: 14px;
-  color: var(--text-color);
-  transition: background 0.15s;
-  border: none;
-  background: transparent;
-  width: 100%;
-  text-align: left;
-}
-
-.context-menu-item:hover {
-  background: var(--item-hover);
-}
-
-.context-menu-item.danger {
-  color: var(--error-color);
-}
-
-.context-menu-item.danger:hover {
-  background: var(--error-color);
-  color: white;
-}
-
+/* Context menu items use .menu-item class */
 .context-menu-icon {
   font-size: 16px;
   width: 20px;
@@ -856,7 +706,7 @@ button:active {
   margin: 4px 0;
 }
 
-/* Kebab Menu */
+/* Kebab menu positioning */
 .kebab-wrapper {
   position: relative;
 }
@@ -870,39 +720,12 @@ button:active {
   top: 100%;
   right: 0;
   margin-top: 4px;
-  background: var(--modal-bg);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-  min-width: 140px;
-  padding: 4px 0;
-  z-index: 1001;
 }
 
-.kebab-menu button {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 10px 14px;
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  text-align: left;
-  font-size: 14px;
-  color: var(--text-color);
-  cursor: pointer;
-}
+/* Kebab menu items use .menu-item class (added via JS) */
 
-.kebab-menu button:hover {
-  background: var(--item-hover);
-}
-
-/* Selection Bar */
+/* .selection-bar uses .flex-between class in HTML */
 .selection-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   gap: 12px;
   padding-top: 10px;
   border-top: 1px solid var(--border-light);
@@ -916,19 +739,9 @@ button:active {
   color: var(--text-color);
 }
 
+/* .selection-actions uses .flex-row class in HTML */
 .selection-actions {
-  display: flex;
   gap: 8px;
-}
-
-/* Utility Classes */
-.hidden {
-  display: none !important;
-}
-
-.muted {
-  color: var(--text-muted);
-  font-size: 0.9rem;
 }
 
 /* Mobile Responsive */

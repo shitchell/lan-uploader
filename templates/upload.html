@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>LAN Uploader</title>
   <link rel="icon" type="image/svg+xml" href="{{ static_url('favicon.svg') }}">
+  <link rel="stylesheet" href="{{ static_url('themes.css') }}">
+  <link rel="stylesheet" href="{{ static_url('utilities.css') }}">
   <link rel="stylesheet" href="{{ static_url('style.css') }}">
 </head>
 <body>
@@ -12,7 +14,7 @@
     <nav class="breadcrumbs" id="breadcrumbs">
       <a href="#" data-path="">Home</a>
     </nav>
-    <div class="header-actions">
+    <div class="header-actions flex-row">
       <div class="search-container">
         <input type="text" id="search_input" placeholder="Search files..." class="search-input">
         <button id="search_btn" class="icon-btn" title="Search">🔍</button>
@@ -32,10 +34,10 @@
         </div>
       </div>
     </div>
-    <div id="selection_bar" class="selection-bar hidden">
+    <div id="selection_bar" class="selection-bar flex-between hidden">
       <button id="cancel_selection" class="secondary-btn">Cancel</button>
       <span id="selection_count">0 selected</span>
-      <div class="selection-actions">
+      <div class="selection-actions flex-row">
         <button id="download_selected" class="secondary-btn">Download</button>
         <button id="delete_selected" class="danger-btn">Delete</button>
       </div>
@@ -58,9 +60,9 @@
   <!-- Upload Modal -->
   <div id="upload_modal" class="modal hidden">
     <div class="modal-content">
-      <div class="modal-header">
+      <div class="modal-header flex-between">
         <h2>Upload Files</h2>
-        <button id="close_upload_modal" class="close-btn">×</button>
+        <button id="close_upload_modal" class="close-btn flex-center">×</button>
       </div>
       <div class="modal-body">
         <p class="muted">Uploading to: <strong id="upload_target_path">/</strong></p>
@@ -74,11 +76,11 @@
         </div>
 
         <div id="file_preview" class="file-preview hidden">
-          <div class="preview-header">
+          <div class="preview-header flex-between">
             <strong>Selected Files (<span id="file_count">0</span>)</strong>
             <button id="clear_files" class="text-btn">Clear All</button>
           </div>
-          <div id="file_list" class="file-list"></div>
+          <div id="file_list" class="file-list flex-col"></div>
         </div>
 
         <div id="progress_container" class="progress-container hidden">
@@ -86,7 +88,7 @@
           <div id="progress_text" class="progress-text">0%</div>
         </div>
       </div>
-      <div class="modal-footer">
+      <div class="modal-footer flex-row">
         <button id="cancel_upload" class="secondary-btn">Cancel</button>
         <button id="start_upload" class="primary-btn">Upload</button>
       </div>
@@ -96,14 +98,14 @@
   <!-- Preview Modal -->
   <div id="preview_modal" class="modal hidden">
     <div class="modal-content preview-modal-content">
-      <div class="modal-header">
+      <div class="modal-header flex-between">
         <h2 id="preview_filename">File Preview</h2>
-        <button id="close_preview_modal" class="close-btn">×</button>
+        <button id="close_preview_modal" class="close-btn flex-center">×</button>
       </div>
       <div class="modal-body preview-body">
-        <div id="preview_content" class="preview-content"></div>
+        <div id="preview_content" class="preview-content flex-center"></div>
       </div>
-      <div class="modal-footer">
+      <div class="modal-footer flex-row">
         <button id="download_file" class="secondary-btn">Download</button>
         <button id="delete_file" class="danger-btn">Delete</button>
       </div>
@@ -113,9 +115,9 @@
   <!-- Search Results Modal -->
   <div id="search_modal" class="modal hidden">
     <div class="modal-content">
-      <div class="modal-header">
+      <div class="modal-header flex-between">
         <h2>Search Results: "<span id="search_query"></span>"</h2>
-        <button id="close_search_modal" class="close-btn">×</button>
+        <button id="close_search_modal" class="close-btn flex-center">×</button>
       </div>
       <div class="modal-body">
         <div id="search_results" class="search-results"></div>
@@ -130,9 +132,9 @@
   <!-- New Folder Modal -->
   <div id="new_folder_modal" class="modal hidden">
     <div class="modal-content">
-      <div class="modal-header">
+      <div class="modal-header flex-between">
         <h2>Create New Folder</h2>
-        <button id="close_new_folder_modal" class="close-btn">×</button>
+        <button id="close_new_folder_modal" class="close-btn flex-center">×</button>
       </div>
       <div class="modal-body">
         <p class="muted">Creating folder in: <strong id="new_folder_parent_path">/</strong></p>
@@ -147,7 +149,7 @@
           Special characters will be sanitized automatically.
         </p>
       </div>
-      <div class="modal-footer">
+      <div class="modal-footer flex-row">
         <button id="cancel_new_folder" class="secondary-btn">Cancel</button>
         <button id="create_new_folder" class="primary-btn">Create Folder</button>
       </div>
@@ -155,6 +157,6 @@
   </div>
 
 <script src="{{ static_url('js/websocket-client.js') }}"></script>
-<script src="{{ static_url('js/app.js') }}"></script>
+<script type="module" src="{{ static_url('js/app.js') }}"></script>
 </body>
 </html>

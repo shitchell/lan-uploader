@@ -61,7 +61,8 @@ body {
   background-color: var(--input-bg);
   color: var(--input-text);
   outline: none;
-  transition: width 0.3s ease, padding 0.3s ease, border 0.3s ease, opacity 0.3s ease;
+  /* transition: width 0.3s ease, padding 0.3s ease, border 0.3s ease, opacity 0.3s ease; */
+  transition: all 0.3 ease;
 }
 
 .search-input:focus,
@@ -218,7 +219,7 @@ button:active {
 .breadcrumbs-inner {
   display: flex;
   align-items: center;
-  gap: 0;
+  gap: 10px;
   overflow-x: auto;
   scrollbar-width: none; /* Firefox */
   -ms-overflow-style: none; /* IE/Edge */
@@ -235,7 +236,7 @@ button:active {
   top: 0;
   bottom: 0;
   width: 40px;
-  background: linear-gradient(to right, var(--bg-color) 0%, var(--bg-color) 30%, transparent 100%);
+  background: linear-gradient(to right, var(--bg-secondary) 0%, var(--bg-secondary) 50%, transparent 100%);
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.2s;
@@ -260,27 +261,21 @@ button:active {
 .breadcrumbs a {
   flex-shrink: 0;
   text-decoration: none;
-  background: var(--bg-secondary);
-  padding: 4px 10px;
-  border-radius: 6px;
   color: var(--text-color);
   font-size: 14px;
+  font-weight: initial;
   transition: all 0.2s;
 }
 
 .breadcrumbs a:hover {
-  background: var(--primary-color);
-  color: white;
+  color: var(--text-bright);
+  font-weight: bold;
 }
 
 .breadcrumbs .separator {
   flex-shrink: 0;
   color: var(--text-muted);
   margin: 0 2px;
-}
-
-.breadcrumbs button {
-  margin-left: 10px;
 }
 
 /* Extends .primary-btn with smaller size for breadcrumbs */
@@ -747,6 +742,7 @@ body.select-mode .folder-item {
   font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
   font-size: 13px;
   line-height: 1.5;
+  white-space: pre-wrap;
   color: var(--text-color);
 }
 
@@ -866,11 +862,6 @@ body.select-mode .folder-item {
     max-width: 100%;
     max-height: 100vh;
     border-radius: 0;
-  }
-
-  /* Hide action buttons on mobile - use context menu instead */
-  .list-view .item-actions {
-    display: none;
   }
 
   /* Collapse search to icon-only on mobile */

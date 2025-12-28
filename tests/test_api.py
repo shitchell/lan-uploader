@@ -551,6 +551,187 @@ class TestIndexPage:
         assert response.status_code == 200
 
 
+class TestLazyCaching:
+    """Tests for filesystem-based browsing with lazy DB caching."""
+
+    def test_manually_added_file_appears_in_browse(self, client: TestClient, temp_upload_dir: Path):
+        """Test that files added directly to filesystem appear when browsing."""
+        # Create a file directly on filesystem (not via upload)
+        manual_file = temp_upload_dir / "manual_file.txt"
+        manual_file.write_text("This file was not uploaded through the API")
+
+        # Browse the directory - file should appear
+        response = client.get("/api/browse")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["ok"] is True
+
+        # File should be in the listing
+        file_names = [f["name"] for f in data["files"]]
+        assert "manual_file.txt" in file_names
+
+    def test_manually_added_file_gets_lazy_cached(self, client: TestClient, temp_upload_dir: Path):
+        """Test that browsing a directory lazy-caches uncached files to DB."""
+        # Create a file directly on filesystem
+        manual_file = temp_upload_dir / "lazy_cache_test.txt"
+        manual_file.write_text("Test content for lazy caching")
+
+        # Browse to trigger lazy caching
+        response = client.get("/api/browse")
+        assert response.status_code == 200
+
+        # Now search for the file - should find it because it was lazy-cached
+        response = client.get("/api/search?q=lazy_cache_test")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["count"] == 1
+        assert data["results"][0]["name"] == "lazy_cache_test.txt"
+
+    def test_mixed_uploaded_and_manual_files(self, client: TestClient, temp_upload_dir: Path, uploaded_file_bytes: bytes):
+        """Test browsing with both uploaded (cached) and manual (uncached) files."""
+        # Upload 2 files via API
+        files = [
+            ("files", ("uploaded1.txt", uploaded_file_bytes, "text/plain")),
+            ("files", ("uploaded2.txt", uploaded_file_bytes, "text/plain")),
+        ]
+        response = client.post("/upload", files=files, data={"target_dir": ""})
+        assert response.status_code == 200
+
+        # Manually add 2 more files
+        (temp_upload_dir / "manual1.txt").write_text("Manual file 1")
+        (temp_upload_dir / "manual2.txt").write_text("Manual file 2")
+
+        # Browse - should see all 4 files
+        response = client.get("/api/browse")
+        assert response.status_code == 200
+
+        data = response.json()
+        file_names = {f["name"] for f in data["files"]}
+        assert file_names == {"uploaded1.txt", "uploaded2.txt", "manual1.txt", "manual2.txt"}
+
+    def test_deleted_file_disappears_from_browse(self, client: TestClient, temp_upload_dir: Path, uploaded_file_bytes: bytes):
+        """Test that files deleted from filesystem don't appear in browse."""
+        # Upload a file
+        files = {"files": ("to_delete.txt", uploaded_file_bytes, "text/plain")}
+        response = client.post("/upload", files=files, data={"target_dir": ""})
+        assert response.status_code == 200
+
+        # Verify it appears in browse
+        response = client.get("/api/browse")
+        file_names = [f["name"] for f in response.json()["files"]]
+        assert "to_delete.txt" in file_names
+
+        # Delete the file directly from filesystem (simulating external deletion)
+        (temp_upload_dir / "to_delete.txt").unlink()
+
+        # Browse again - file should not appear
+        response = client.get("/api/browse")
+        file_names = [f["name"] for f in response.json()["files"]]
+        assert "to_delete.txt" not in file_names
+
+    def test_subdirectory_file_count_from_filesystem(self, client: TestClient, temp_upload_dir: Path):
+        """Test that directory file counts come from filesystem, not DB."""
+        # Create a subdirectory with files
+        subdir = temp_upload_dir / "counted_dir"
+        subdir.mkdir()
+        for i in range(5):
+            (subdir / f"file{i}.txt").write_text(f"Content {i}")
+
+        # Browse root - should show directory with correct file count
+        response = client.get("/api/browse")
+        assert response.status_code == 200
+
+        data = response.json()
+        dirs = [d for d in data["directories"] if d["name"] == "counted_dir"]
+        assert len(dirs) == 1
+        assert dirs[0]["file_count"] == 5
+
+
+class TestSyncEndpoint:
+    """Tests for the POST /api/sync endpoint."""
+
+    def test_sync_adds_new_files(self, client: TestClient, temp_upload_dir: Path):
+        """Test that sync adds files that exist on disk but not in DB."""
+        # Add files directly to filesystem
+        (temp_upload_dir / "sync_test1.txt").write_text("Content 1")
+        (temp_upload_dir / "sync_test2.txt").write_text("Content 2")
+
+        # Run sync
+        response = client.post("/api/sync")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["ok"] is True
+        assert data["added"] >= 2  # At least our 2 files
+
+        # Files should now be searchable
+        response = client.get("/api/search?q=sync_test")
+        assert response.json()["count"] == 2
+
+    def test_sync_removes_stale_entries(self, client: TestClient, temp_upload_dir: Path, uploaded_file_bytes: bytes):
+        """Test that sync removes DB entries for deleted files."""
+        # Upload a file (creates DB entry)
+        files = {"files": ("sync_delete.txt", uploaded_file_bytes, "text/plain")}
+        response = client.post("/upload", files=files, data={"target_dir": ""})
+        assert response.status_code == 200
+
+        # Delete file from filesystem
+        (temp_upload_dir / "sync_delete.txt").unlink()
+
+        # Run sync
+        response = client.post("/api/sync")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["ok"] is True
+        assert data["removed"] >= 1
+
+        # File should no longer be searchable
+        response = client.get("/api/search?q=sync_delete")
+        assert response.json()["count"] == 0
+
+    def test_sync_updates_changed_files(self, client: TestClient, temp_upload_dir: Path, uploaded_file_bytes: bytes):
+        """Test that sync updates DB when file size changes."""
+        # Upload a file
+        files = {"files": ("sync_update.txt", uploaded_file_bytes, "text/plain")}
+        response = client.post("/upload", files=files, data={"target_dir": ""})
+        assert response.status_code == 200
+        original_size = len(uploaded_file_bytes)
+
+        # Modify the file (change its size)
+        new_content = b"This is completely different content with a different size"
+        (temp_upload_dir / "sync_update.txt").write_bytes(new_content)
+
+        # Run sync
+        response = client.post("/api/sync")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["ok"] is True
+        # File size changed, so it should be updated
+        assert data["updated"] >= 1
+
+    def test_sync_returns_statistics(self, client: TestClient, temp_upload_dir: Path):
+        """Test that sync returns proper statistics."""
+        response = client.post("/api/sync")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert "ok" in data
+        assert "added" in data
+        assert "updated" in data
+        assert "removed" in data
+        assert "total_files" in data
+
+        # All should be non-negative integers
+        assert isinstance(data["added"], int) and data["added"] >= 0
+        assert isinstance(data["updated"], int) and data["updated"] >= 0
+        assert isinstance(data["removed"], int) and data["removed"] >= 0
+        assert isinstance(data["total_files"], int) and data["total_files"] >= 0
+
+
 class TestThumbnails:
     """Tests for the thumbnail generation endpoint."""
 

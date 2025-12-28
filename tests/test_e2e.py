@@ -12,6 +12,7 @@ These tests verify the complete user experience including:
 """
 
 import os
+import re
 import sys
 import shutil
 import tempfile
@@ -25,6 +26,11 @@ from playwright.sync_api import Page, expect
 
 # Add parent directory to path to import app
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+# Mark all tests in this module as e2e tests
+# These tests use Playwright which creates its own event loop
+# and should be run separately from pytest-asyncio tests
+pytestmark = pytest.mark.e2e
 
 
 @pytest.fixture(scope="session")
@@ -329,13 +335,13 @@ class TestWebSocketUpload:
             expect(progress_container).not_to_have_class("hidden")
 
             # Wait for upload to complete
-            # The modal should close automatically
-            page.wait_for_selector("#upload_modal.hidden", timeout=10000)
+            # The modal should close automatically (wait for hidden class, not visibility)
+            page.wait_for_selector("#upload_modal.hidden", state="attached", timeout=10000)
 
-            # Should show success message
+            # Should show success message (class includes "success" among other classes)
             status_message = page.locator("#status_message")
             expect(status_message).to_be_visible()
-            expect(status_message).to_have_class("success")
+            expect(status_message).to_have_class(re.compile(r".*\bsuccess\b.*"))
 
         finally:
             # Clean up temp file
@@ -380,7 +386,7 @@ class TestWebSocketUpload:
             expect(progress_text).to_be_visible()
 
             # Wait for completion
-            page.wait_for_selector("#upload_modal.hidden", timeout=10000)
+            page.wait_for_selector("#upload_modal.hidden", state="attached", timeout=10000)
 
         finally:
             # Clean up temp files
@@ -393,10 +399,11 @@ class TestWebSocketUpload:
         page.goto(app_server)
         page.wait_for_load_state("networkidle")
 
-        # Mock WebSocket to be unavailable
+        # Mock WebSocket to be unavailable - must delete, not just set to undefined
+        # because the check uses 'WebSocket' in window
         page.evaluate("""
-            // Override WebSocket to simulate unsupported browser
-            window.WebSocket = undefined;
+            // Delete WebSocket to simulate unsupported browser
+            delete window.WebSocket;
         """)
 
         # Open upload modal
@@ -423,7 +430,7 @@ class TestWebSocketUpload:
             expect(progress_container).not_to_have_class("hidden")
 
             # Wait for completion
-            page.wait_for_selector("#upload_modal.hidden", timeout=10000)
+            page.wait_for_selector("#upload_modal.hidden", state="attached", timeout=10000)
 
             # Should show success
             status_message = page.locator("#status_message")
@@ -510,7 +517,7 @@ class TestUploadModal:
         close_btn.click()
 
         # Modal should be hidden
-        expect(modal).to_have_class("hidden")
+        expect(modal).not_to_be_visible()
 
     def test_upload_modal_cancel_button(self, page: Page, app_server: str):
         """Test that clicking Cancel closes the modal."""
@@ -527,7 +534,7 @@ class TestUploadModal:
 
         # Modal should be hidden
         modal = page.locator("#upload_modal")
-        expect(modal).to_have_class("hidden")
+        expect(modal).not_to_be_visible()
 
 
 class TestNewFolderModal:
@@ -578,7 +585,7 @@ class TestNewFolderModal:
         close_btn.click()
 
         # Modal should be hidden
-        expect(modal).to_have_class("hidden")
+        expect(modal).not_to_be_visible()
 
     def test_create_new_folder(self, page: Page, app_server: str, test_upload_dir: Path):
         """Test creating a new folder."""
@@ -604,7 +611,7 @@ class TestNewFolderModal:
 
         # Modal should close
         modal = page.locator("#new_folder_modal")
-        expect(modal).to_have_class("hidden")
+        expect(modal).not_to_be_visible()
 
         # New folder should appear in the file browser
         folder_item = page.locator(f".folder-item:has-text('{folder_name}')")
@@ -721,7 +728,7 @@ class TestSearchFunctionality:
 
         # Modal should be hidden
         modal = page.locator("#search_modal")
-        expect(modal).to_have_class("hidden")
+        expect(modal).not_to_be_visible()
 
 
 class TestViewModeToggle:
@@ -798,7 +805,7 @@ class TestFilePreview:
         close_btn.click()
 
         # Modal should be hidden
-        expect(modal).to_have_class("hidden")
+        expect(modal).not_to_be_visible()
 
 
 class TestDeleteConfirmation:

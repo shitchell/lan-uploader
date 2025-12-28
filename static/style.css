@@ -311,6 +311,21 @@ button:active {
 .list-view .item-icon {
   font-size: 24px;
   flex-shrink: 0;
+  width: 24px;
+  min-width: 24px;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* List View Thumbnails */
+.list-view .item-thumbnail-list {
+  width: 24px;
+  height: 24px;
+  object-fit: cover;
+  border-radius: 4px;
+  display: block;
 }
 
 .list-view .item-info {

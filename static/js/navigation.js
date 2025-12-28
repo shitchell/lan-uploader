@@ -426,8 +426,13 @@ function createFileItem(file) {
   const size = formatFileSize(file.size);
 
   if (state.currentViewMode === 'list') {
+    // Determine icon content - use thumbnail if available for images/videos, otherwise emoji
+    const iconContent = (file.has_thumbnail && (file.preview_type === 'image' || file.preview_type === 'video'))
+      ? `<img src="${getThumbnailUrl(file.path)}" class="item-thumbnail-list" alt="${escapeHtml(file.name)}">`
+      : icon;
+
     item.innerHTML = `
-      <div class="item-icon">${icon}</div>
+      <div class="item-icon">${iconContent}</div>
       <div class="item-info">
         <div class="item-name truncate">${escapeHtml(file.name)}</div>
         <div class="item-details text-sm">${size} • ${file.extension || 'unknown'}</div>

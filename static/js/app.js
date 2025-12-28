@@ -139,7 +139,7 @@ async function navigateTo(path, updateHash = true) {
 
   // Update URL hash for browser history (unless we're responding to a hash change)
   if (updateHash) {
-    const newHash = currentPath ? encodeURIComponent(currentPath) : '';
+    const newHash = currentPath ? currentPath.split('/').map(encodeURIComponent).join('/') : '';
     if (window.location.hash.slice(1) !== newHash) {
       window.location.hash = newHash;
     }
@@ -971,12 +971,12 @@ if (loadSentinel) {
 
 // Handle browser back/forward navigation via URL hash
 window.addEventListener('hashchange', () => {
-  const hashPath = decodeURIComponent(window.location.hash.slice(1));
+  const hashPath = window.location.hash.slice(1).split('/').map(decodeURIComponent).join('/');
   if (hashPath !== currentPath) {
     navigateTo(hashPath, false); // Don't update hash again, we're responding to it
   }
 });
 
 // Initialize from URL hash (or empty path for root)
-const initialPath = decodeURIComponent(window.location.hash.slice(1));
+const initialPath = window.location.hash.slice(1).split('/').map(decodeURIComponent).join('/');
 navigateTo(initialPath, false);

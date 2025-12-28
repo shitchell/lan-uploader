@@ -13,6 +13,7 @@ import {
   enterSelectMode,
   exitSelectMode,
   clearAllSelections,
+  removeItemFromGrid,
 } from './navigation.js';
 import {
   openUploadModal,
@@ -31,7 +32,6 @@ import {
   downloadFileDirectly,
   downloadDirectoryDirectly,
   deleteFileDirectly,
-  setFileDeletedHandler,
 } from './preview.js';
 import {
   performSearch,
@@ -65,7 +65,7 @@ setNavigationHandlers({
   openNewFolderModal,
   downloadFile: (path) => downloadFileDirectly(path),
   downloadDirectory: (path) => downloadDirectoryDirectly(path),
-  deleteFile: (path, name) => deleteFileDirectly(path, name, () => loadDirectory(state.currentPath)),
+  deleteFile: (path, name) => deleteFileDirectly(path, name, () => removeItemFromGrid(path)),
 });
 
 // Context menu needs download/delete handlers
@@ -78,15 +78,14 @@ setContextMenuHandlers({
     }
   },
   delete: (item) => {
-    deleteFileDirectly(item.path, item.name, () => loadDirectory(state.currentPath));
+    deleteFileDirectly(item.path, item.name, () => removeItemFromGrid(item.path));
   },
 });
 
 // Context menu long-press should enter select mode
 setEnterSelectModeCallback(() => enterSelectMode());
 
-// Preview needs to refresh after delete
-setFileDeletedHandler(() => loadDirectory(state.currentPath));
+// Preview delete now calls removeItemFromGrid directly (no callback needed)
 
 // Upload needs to refresh after complete
 setUploadCompleteHandler(() => loadDirectory(state.currentPath));
@@ -320,9 +319,12 @@ deleteSelectedBtn.addEventListener('click', async () => {
       showStatus(`${result.errors.length} item(s) failed to delete`, 'error');
     }
 
-    // Exit select mode and refresh
+    // Exit select mode and remove deleted items from grid
     exitSelectMode();
-    loadDirectory(state.currentPath);
+    // Determine which paths were successfully deleted (not in errors)
+    const errorPaths = new Set(result.errors?.map(e => e.path) || []);
+    const deletedPaths = paths.filter(path => !errorPaths.has(path));
+    deletedPaths.forEach(path => removeItemFromGrid(path));
   } catch (error) {
     showStatus('Failed to delete items: ' + error.message, 'error');
   }

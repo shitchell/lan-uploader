@@ -2,6 +2,7 @@
 import { state } from './state.js';
 import { escapeHtml, formatFileSize, showStatus } from './utils.js';
 import { fetchTextPreview, deleteFile, deleteFileForce, getFileUrl } from './api.js';
+import { removeItemFromGrid } from './navigation.js';
 
 // DOM elements (cached)
 let elements = null;
@@ -78,22 +79,22 @@ export async function deleteCurrentFile() {
 
   if (!confirm(`Delete "${state.currentPreviewFile.name}"?`)) return;
 
+  const deletedPath = state.currentPreviewFile.path;
+
   try {
-    await deleteFile(state.currentPreviewFile.path);
+    await deleteFile(deletedPath);
     showStatus('File deleted successfully', 'success');
     closePreview();
-    if (onFileDeleted) {
-      onFileDeleted();
-    }
+    // Remove the item from grid directly instead of triggering full refresh
+    removeItemFromGrid(deletedPath);
   } catch (error) {
     if (error.code === 'directory_not_empty') {
       if (confirm('Directory is not empty. Delete anyway? This will delete all contents.')) {
-        await deleteFileForce(state.currentPreviewFile.path);
+        await deleteFileForce(deletedPath);
         showStatus('Deleted successfully', 'success');
         closePreview();
-        if (onFileDeleted) {
-          onFileDeleted();
-        }
+        // Remove the item from grid directly instead of triggering full refresh
+        removeItemFromGrid(deletedPath);
       }
     } else {
       showStatus('Delete failed: ' + error.message, 'error');

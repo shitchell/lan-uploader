@@ -52,6 +52,28 @@ export function clearSelection() {
   }
 }
 
+// Remove a single item from the grid by path (used after delete to avoid full refresh)
+export function removeItemFromGrid(path) {
+  const { fileGrid, emptyState } = getElements();
+  const item = fileGrid.querySelector(`[data-path="${CSS.escape(path)}"]`);
+  if (item) {
+    item.remove();
+
+    // Decrement offset to maintain accurate count
+    if (state.currentOffset > 0) {
+      state.currentOffset--;
+    }
+
+    // Check if grid is now empty
+    const remainingItems = fileGrid.querySelectorAll('.file-item, .folder-item');
+    if (remainingItems.length === 0) {
+      if (emptyState) {
+        emptyState.classList.remove('hidden');
+      }
+    }
+  }
+}
+
 // Multi-selection functions for batch operations
 export function toggleItemSelection(path, itemData, element) {
   if (state.selectedItems.has(path)) {

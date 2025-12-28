@@ -32,6 +32,26 @@ export function setNavigationHandlers(handlers) {
   actionHandlers = { ...actionHandlers, ...handlers };
 }
 
+// Selection functions
+export function selectItem(element) {
+  // Clear previous selection
+  if (state.selectedElement) {
+    state.selectedElement.classList.remove('selected');
+  }
+  // Set new selection
+  state.selectedElement = element;
+  if (element) {
+    element.classList.add('selected');
+  }
+}
+
+export function clearSelection() {
+  if (state.selectedElement) {
+    state.selectedElement.classList.remove('selected');
+    state.selectedElement = null;
+  }
+}
+
 export async function navigateTo(path, updateHash = true) {
   state.currentPath = path || '';
 
@@ -195,6 +215,7 @@ function createFileItem(file) {
   const item = document.createElement('div');
   item.className = 'file-item card';
   item.addEventListener('click', () => {
+    selectItem(item);
     if (actionHandlers.openPreview) {
       actionHandlers.openPreview(file);
     }

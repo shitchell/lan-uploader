@@ -395,6 +395,13 @@ button:active {
   margin-top: 4px;
 }
 
+/* Selected state - works for both list and gallery view */
+.file-item.selected,
+.folder-item.selected {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
 /* Empty State */
 .empty-state {
   text-align: center;

@@ -22,4 +22,7 @@ export const state = {
 
   // Kebab overflow
   currentlyOverflowed: new Set(),
+
+  // Selection state
+  selectedElement: null,
 };

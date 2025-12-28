@@ -9,6 +9,7 @@ import {
   toggleViewMode,
   initBrowserView,
   setNavigationHandlers,
+  clearSelection,
 } from './navigation.js';
 import {
   openUploadModal,
@@ -234,8 +235,12 @@ kebabMenuBtn.addEventListener('click', (e) => {
   e.stopPropagation();
   kebabMenu.classList.toggle('hidden');
 });
-document.addEventListener('click', () => {
+document.addEventListener('click', (e) => {
   kebabMenu.classList.add('hidden');
+  // Clear selection if click is not on a file-item or folder-item
+  if (!e.target.closest('.file-item') && !e.target.closest('.folder-item')) {
+    clearSelection();
+  }
 });
 
 // New folder
@@ -246,9 +251,10 @@ newFolderNameInput.addEventListener('keypress', (e) => {
   if (e.key === 'Enter') performCreateFolder();
 });
 
-// Escape to close modals
+// Escape to close modals and clear selection
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
+    clearSelection();
     hideContextMenu();
     const uploadModal = document.getElementById('upload_modal');
     const previewModal = document.getElementById('preview_modal');

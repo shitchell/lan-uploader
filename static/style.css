@@ -868,6 +868,11 @@ body.select-mode .folder-item {
     border-radius: 0;
   }
 
+  /* Hide action buttons on mobile - use context menu instead */
+  .list-view .item-actions {
+    display: none;
+  }
+
   /* Collapse search to icon-only on mobile */
   .header-actions:not(.mobile-search-active) .search-container {
     flex: 0 0 auto;

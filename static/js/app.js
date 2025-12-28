@@ -282,6 +282,13 @@ function createFolderItem(dir) {
     `;
   }
 
+  // Attach context menu (right-click / long-press)
+  attachContextMenuEvents(item, {
+    path: dir.path,
+    name: dir.name,
+    isDirectory: true,
+  });
+
   return item;
 }
 
@@ -321,6 +328,14 @@ function createFileItem(file) {
       `;
     }
   }
+
+  // Attach context menu (right-click / long-press)
+  attachContextMenuEvents(item, {
+    path: file.path,
+    name: file.name,
+    isDirectory: false,
+    preview_type: file.preview_type,
+  });
 
   return item;
 }
@@ -745,6 +760,186 @@ async function deleteFileDirectly(filepath, filename) {
   }
 }
 
+// ===== Context Menu =====
+// Registry of context menu actions by item type
+const CONTEXT_MENU_ACTIONS = {
+  // Base actions available for all items
+  base: [
+    { id: 'download', label: 'Download', icon: '⬇️', handler: 'contextDownload' },
+    { id: 'delete', label: 'Delete', icon: '🗑️', handler: 'contextDelete', danger: true },
+  ],
+  // Additional actions for directories
+  directory: [],
+  // Additional actions for images
+  image: [],
+  // Additional actions for videos
+  video: [],
+  // Additional actions for text/code files
+  text: [],
+};
+
+// Current context menu state
+let activeContextMenu = null;
+let contextMenuTarget = null;
+let longPressTimer = null;
+const LONG_PRESS_DURATION = 500; // ms
+
+/**
+ * Get menu items for a specific item type
+ * @param {string} itemType - 'directory', 'image', 'video', 'text', etc.
+ * @returns {Array} Combined array of base + type-specific actions
+ */
+function getContextMenuItems(itemType) {
+  const baseActions = [...CONTEXT_MENU_ACTIONS.base];
+  const typeActions = CONTEXT_MENU_ACTIONS[itemType] || [];
+  return [...typeActions, ...baseActions];
+}
+
+/**
+ * Show context menu at specified position
+ * @param {Object} itemData - Data about the item (path, name, type, isDirectory)
+ * @param {number} x - X coordinate
+ * @param {number} y - Y coordinate
+ */
+function showContextMenu(itemData, x, y) {
+  // Hide any existing menu first
+  hideContextMenu();
+
+  contextMenuTarget = itemData;
+  const itemType = itemData.isDirectory ? 'directory' : (itemData.preview_type || 'file');
+  const menuItems = getContextMenuItems(itemType);
+
+  // Create menu element
+  const menu = document.createElement('div');
+  menu.className = 'context-menu';
+  menu.id = 'context_menu';
+
+  menuItems.forEach((action, index) => {
+    // Add separator before danger items if previous item wasn't danger
+    if (action.danger && index > 0 && !menuItems[index - 1].danger) {
+      const separator = document.createElement('div');
+      separator.className = 'context-menu-separator';
+      menu.appendChild(separator);
+    }
+
+    const item = document.createElement('div');
+    item.className = 'context-menu-item' + (action.danger ? ' danger' : '');
+    item.innerHTML = `<span class="context-menu-icon">${action.icon}</span>${action.label}`;
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // Save target before hiding menu (hideContextMenu clears contextMenuTarget)
+      const target = contextMenuTarget;
+      hideContextMenu();
+      // Call the handler function by name
+      if (typeof window[action.handler] === 'function') {
+        window[action.handler](target);
+      }
+    });
+    menu.appendChild(item);
+  });
+
+  document.body.appendChild(menu);
+  activeContextMenu = menu;
+
+  // Position the menu, ensuring it stays within viewport
+  const menuRect = menu.getBoundingClientRect();
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+
+  let finalX = x;
+  let finalY = y;
+
+  // Adjust horizontal position if menu would overflow right edge
+  if (x + menuRect.width > viewportWidth) {
+    finalX = viewportWidth - menuRect.width - 10;
+  }
+
+  // Adjust vertical position if menu would overflow bottom edge
+  if (y + menuRect.height > viewportHeight) {
+    finalY = viewportHeight - menuRect.height - 10;
+  }
+
+  menu.style.left = finalX + 'px';
+  menu.style.top = finalY + 'px';
+
+  // Add dismiss handlers
+  setTimeout(() => {
+    document.addEventListener('click', hideContextMenu);
+    document.addEventListener('scroll', hideContextMenu, true);
+  }, 0);
+}
+
+/**
+ * Hide the active context menu
+ */
+function hideContextMenu() {
+  if (activeContextMenu) {
+    activeContextMenu.remove();
+    activeContextMenu = null;
+    contextMenuTarget = null;
+    document.removeEventListener('click', hideContextMenu);
+    document.removeEventListener('scroll', hideContextMenu, true);
+  }
+}
+
+// Context menu action handlers
+function contextDownload(item) {
+  if (item.isDirectory) {
+    downloadDirectoryDirectly(item.path, item.name);
+  } else {
+    downloadFileDirectly(item.path, item.name);
+  }
+}
+
+function contextDelete(item) {
+  deleteFileDirectly(item.path, item.name);
+}
+
+/**
+ * Start long-press detection
+ * @param {Object} itemData - Data about the item
+ * @param {TouchEvent} e - The touch event
+ */
+function startLongPress(itemData, e) {
+  longPressTimer = setTimeout(() => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    showContextMenu(itemData, touch.clientX, touch.clientY);
+  }, LONG_PRESS_DURATION);
+}
+
+/**
+ * Cancel long-press detection
+ */
+function cancelLongPress() {
+  if (longPressTimer) {
+    clearTimeout(longPressTimer);
+    longPressTimer = null;
+  }
+}
+
+/**
+ * Attach context menu events to an item element
+ * @param {HTMLElement} element - The DOM element
+ * @param {Object} itemData - Data about the item
+ */
+function attachContextMenuEvents(element, itemData) {
+  // Right-click (desktop)
+  element.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    showContextMenu(itemData, e.clientX, e.clientY);
+  });
+
+  // Long-press (mobile)
+  element.addEventListener('touchstart', (e) => {
+    startLongPress(itemData, e);
+  }, { passive: true });
+
+  element.addEventListener('touchend', cancelLongPress);
+  element.addEventListener('touchmove', cancelLongPress);
+  element.addEventListener('touchcancel', cancelLongPress);
+}
+
 // ===== Search =====
 async function performSearch() {
   const query = searchInput.value.trim();
@@ -953,9 +1148,10 @@ newFolderName.addEventListener('keypress', (e) => {
   if (e.key === 'Enter') performCreateFolder();
 });
 
-// Close modals on Escape key
+// Close modals and context menu on Escape key
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
+    hideContextMenu();
     if (!uploadModal.classList.contains('hidden')) closeUploadModalFn();
     if (!previewModal.classList.contains('hidden')) closePreviewModalFn();
     if (!searchModal.classList.contains('hidden')) closeSearchModalFn();

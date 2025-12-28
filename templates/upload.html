@@ -9,22 +9,37 @@
 </head>
 <body>
   <header class="app-header">
-    <h1>📁 LAN Uploader</h1>
+    <nav class="breadcrumbs" id="breadcrumbs">
+      <a href="#" data-path="">Home</a>
+    </nav>
     <div class="header-actions">
       <div class="search-container">
         <input type="text" id="search_input" placeholder="Search files..." class="search-input">
         <button id="search_btn" class="icon-btn" title="Search">🔍</button>
+        <button id="search_cancel" class="icon-btn hidden" title="Cancel search">✕</button>
       </div>
-      <button id="upload_btn" class="primary-btn" title="Upload files">
-        <span class="btn-icon">⬆</span> Upload
-      </button>
+      <button id="select_mode_btn" class="icon-btn" title="Select files">☑</button>
       <button id="view_toggle_btn" class="icon-btn" title="Toggle view mode">
         <span id="view_icon">⊞</span>
       </button>
+      <button id="upload_btn" class="primary-btn" title="Upload files">
+        <span class="btn-icon">⬆</span><span class="btn-text">Upload</span>
+      </button>
+      <div class="kebab-wrapper">
+        <button id="kebab_menu_btn" class="icon-btn" title="More actions">⋮</button>
+        <div id="kebab_menu" class="kebab-menu hidden">
+          <!-- Overflow items will be moved here dynamically -->
+        </div>
+      </div>
     </div>
-    <nav class="breadcrumbs" id="breadcrumbs">
-      <a href="#" data-path="">Home</a>
-    </nav>
+    <div id="selection_bar" class="selection-bar hidden">
+      <button id="cancel_selection" class="secondary-btn">Cancel</button>
+      <span id="selection_count">0 selected</span>
+      <div class="selection-actions">
+        <button id="download_selected" class="secondary-btn">Download</button>
+        <button id="delete_selected" class="danger-btn">Delete</button>
+      </div>
+    </div>
   </header>
 
   <main class="file-browser">

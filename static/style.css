@@ -121,41 +121,73 @@ body {
 .app-header {
   background-color: var(--bg-secondary);
   padding: var(--pad);
-  padding-bottom: 0;
+  padding-bottom: var(--pad);
   border-bottom: 1px solid var(--border-color);
   position: sticky;
   top: 0;
   z-index: 100;
-}
-
-.app-header h1 {
-  font-size: 1.2rem;
-  margin: 0 0 10px 0;
-  color: var(--text-color);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .header-actions {
   display: flex;
   gap: 8px;
   align-items: center;
-  flex-wrap: wrap;
+  position: relative;
+}
+
+/* Mark buttons as overflowable for JS */
+.header-actions > button,
+.header-actions > .search-container {
+  flex-shrink: 0;
 }
 
 .search-container {
   display: flex;
   gap: 4px;
   flex: 1;
-  min-width: 200px;
+  min-width: 0;
+  transition: flex 0.3s ease;
 }
 
 .search-input {
   flex: 1;
+  min-width: 0;
   padding: 8px 12px;
   border: 1px solid var(--input-border);
   border-radius: 8px;
   font-size: 14px;
   background-color: var(--input-bg);
   color: var(--input-text);
+  outline: none;
+  transition: width 0.3s ease, padding 0.3s ease, border 0.3s ease, opacity 0.3s ease;
+}
+
+.search-input:focus,
+.header-actions.mobile-search-active .search-input:focus {
+  border-color: var(--primary-color);
+}
+
+/* Mobile search expanded state */
+.header-actions.mobile-search-active {
+  overflow: hidden;
+}
+
+.header-actions.mobile-search-active .search-container {
+  flex: 1 0 100%;
+}
+
+.header-actions.mobile-search-active .search-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--input-border);
+  opacity: 1;
+}
+
+#search_cancel {
+  flex-shrink: 0;
 }
 
 /* Buttons */
@@ -231,14 +263,17 @@ button:active {
 
 /* Breadcrumbs */
 .breadcrumbs {
-  display: flex;
-  gap: 6px;
-  padding: 10px var(--pad);
-  flex-wrap: wrap;
-  align-items: baseline;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  direction: rtl;
+  text-align: left;
+  unicode-bidi: plaintext;
+  padding: 4px 0; /* room for button padding */
 }
 
 .breadcrumbs a {
+  direction: ltr;
   text-decoration: none;
   background: var(--bg-secondary);
   padding: 4px 10px;
@@ -258,7 +293,12 @@ button:active {
   margin: 0 2px;
 }
 
+.breadcrumbs button {
+  margin-left: 10px;
+}
+
 .new-folder-btn {
+  direction: ltr;
   padding: 4px 12px;
   font-size: 13px;
   background: var(--primary-color);
@@ -816,6 +856,71 @@ button:active {
   margin: 4px 0;
 }
 
+/* Kebab Menu */
+.kebab-wrapper {
+  position: relative;
+}
+
+#kebab_menu_btn {
+  display: none; /* Hidden by default, JS shows via inline style when needed */
+}
+
+.kebab-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: var(--modal-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  min-width: 140px;
+  padding: 4px 0;
+  z-index: 1001;
+}
+
+.kebab-menu button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  text-align: left;
+  font-size: 14px;
+  color: var(--text-color);
+  cursor: pointer;
+}
+
+.kebab-menu button:hover {
+  background: var(--item-hover);
+}
+
+/* Selection Bar */
+.selection-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-light);
+  margin-top: 0;
+}
+
+#selection_count {
+  flex: 1;
+  text-align: center;
+  font-weight: 500;
+  color: var(--text-color);
+}
+
+.selection-actions {
+  display: flex;
+  gap: 8px;
+}
+
 /* Utility Classes */
 .hidden {
   display: none !important;
@@ -842,34 +947,36 @@ button:active {
     border-radius: 0;
   }
 
-  .header-actions {
-    width: 100%;
-    flex-wrap: wrap;
+  /* Collapse search to icon-only on mobile */
+  .header-actions:not(.mobile-search-active) .search-container {
+    flex: 0 0 auto;
   }
 
-  .search-container {
-    width: 100%;
-    order: -1;
-    flex: 1 1 100%;
-    min-width: unset;
+  .header-actions:not(.mobile-search-active) .search-input {
+    width: 0;
+    padding: 0;
+    border: none;
+    opacity: 0;
   }
 
-  /* Make Upload button icon-only on mobile */
-  #upload_btn .btn-icon {
-    margin-right: 0;
+  /* Hide button text on mobile, show only icon */
+  .btn-text {
+    display: none;
   }
 
   #upload_btn {
     padding: 8px 12px;
   }
 
-  /* Hide "Upload" text on mobile, show only icon */
-  @supports (content-visibility: auto) {
-    #upload_btn {
-      font-size: 0;
-    }
-    #upload_btn .btn-icon {
-      font-size: 16px;
-    }
+  /* Selection bar stacks on mobile */
+  .selection-bar {
+    flex-wrap: wrap;
+  }
+
+  #selection_count {
+    order: -1;
+    flex: 1 0 100%;
+    text-align: left;
+    margin-bottom: 8px;
   }
 }

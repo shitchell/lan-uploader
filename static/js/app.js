@@ -42,11 +42,23 @@ document.addEventListener('visibilitychange', async () => {
 
 // ===== DOM Elements =====
 // Header
+const searchContainer = document.querySelector('.search-container');
 const searchInput = document.getElementById('search_input');
 const searchBtn = document.getElementById('search_btn');
+const searchCancel = document.getElementById('search_cancel');
+const selectModeBtn = document.getElementById('select_mode_btn');
 const uploadBtn = document.getElementById('upload_btn');
 const viewToggleBtn = document.getElementById('view_toggle_btn');
 const viewIcon = document.getElementById('view_icon');
+const kebabMenuBtn = document.getElementById('kebab_menu_btn');
+const kebabMenu = document.getElementById('kebab_menu');
+
+// Selection bar
+const selectionBar = document.getElementById('selection_bar');
+const cancelSelectionBtn = document.getElementById('cancel_selection');
+const selectionCount = document.getElementById('selection_count');
+const downloadSelectedBtn = document.getElementById('download_selected');
+const deleteSelectedBtn = document.getElementById('delete_selected');
 
 // Browser
 const breadcrumbs = document.getElementById('breadcrumbs');
@@ -1134,11 +1146,45 @@ downloadFile.addEventListener('click', downloadCurrentFile);
 deleteFile.addEventListener('click', deleteCurrentFile);
 
 // Search
-searchBtn.addEventListener('click', performSearch);
+searchBtn.addEventListener('click', (e) => {
+  // On mobile, first click expands the search; second click performs search
+  const headerActions = document.querySelector('.header-actions');
+  if (window.innerWidth <= 600 && !headerActions.classList.contains('mobile-search-active')) {
+    e.preventDefault();
+    expandSearch();
+  } else {
+    performSearch();
+  }
+});
 searchInput.addEventListener('keypress', (e) => {
   if (e.key === 'Enter') performSearch();
 });
+searchCancel.addEventListener('click', collapseSearch);
 closeSearchModal.addEventListener('click', closeSearchModalFn);
+
+// Search expand/collapse for mobile
+function expandSearch() {
+  document.querySelector('.header-actions').classList.add('mobile-search-active');
+  searchCancel.classList.remove('hidden');
+  searchInput.focus();
+}
+
+function collapseSearch() {
+  document.querySelector('.header-actions').classList.remove('mobile-search-active');
+  searchCancel.classList.add('hidden');
+  searchInput.value = '';
+}
+
+// Kebab menu toggle
+kebabMenuBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  kebabMenu.classList.toggle('hidden');
+});
+
+// Close kebab menu when clicking outside
+document.addEventListener('click', () => {
+  kebabMenu.classList.add('hidden');
+});
 
 // New Folder (button is created dynamically in renderBreadcrumbs)
 closeNewFolderModal.addEventListener('click', closeNewFolderModalFn);
@@ -1163,6 +1209,87 @@ document.addEventListener('keydown', (e) => {
 browserContent.className = `browser-content ${currentViewMode}-view`;
 viewIcon.textContent = currentViewMode === 'list' ? '⊞' : '☰';
 setupBrowserDragDrop();
+
+// ===== Dynamic Kebab Overflow =====
+// Track which buttons can overflow into kebab menu (in priority order, last = first to hide)
+const overflowableButtons = [
+  { btn: selectModeBtn, label: 'Select', icon: '☑', width: 50 },
+  { btn: viewToggleBtn, label: 'Toggle View', icon: '⊞', width: 50 },
+  { btn: uploadBtn, label: 'Upload', icon: '⬆', width: 90 }, // wider due to text on desktop
+];
+let currentlyOverflowed = new Set();
+
+function updateKebabOverflow() {
+  const headerActions = document.querySelector('.header-actions');
+  if (!headerActions) return;
+
+  // Don't run overflow logic when search is expanded
+  if (headerActions.classList.contains('mobile-search-active')) {
+    kebabMenuBtn.style.display = 'none';
+    return;
+  }
+
+  const viewportWidth = window.innerWidth;
+  const isMobile = viewportWidth <= 600;
+
+  // Calculate how many buttons need to overflow based on viewport
+  let buttonsToOverflow = 0;
+
+  if (isMobile) {
+    // On mobile, always collapse view toggle and select into kebab
+    // Keep only upload visible (as icon)
+    buttonsToOverflow = 2; // viewToggle and selectMode
+  } else if (viewportWidth <= 480) {
+    // Very narrow - collapse all
+    buttonsToOverflow = 3;
+  } else if (viewportWidth <= 768) {
+    // Tablet-ish - collapse view toggle
+    buttonsToOverflow = 1;
+  } else {
+    // Desktop - show all
+    buttonsToOverflow = 0;
+  }
+
+  // Clear kebab menu
+  kebabMenu.innerHTML = '';
+  currentlyOverflowed.clear();
+
+  // Restore all buttons first
+  overflowableButtons.forEach(item => {
+    item.btn.classList.remove('hidden');
+  });
+
+  // If nothing to overflow, hide kebab and we're done
+  if (buttonsToOverflow === 0) {
+    kebabMenuBtn.style.display = 'none';
+    return;
+  }
+
+  // Overflow buttons from the end of the array (lowest priority first)
+  for (let i = 0; i < buttonsToOverflow && i < overflowableButtons.length; i++) {
+    const item = overflowableButtons[i];
+    item.btn.classList.add('hidden');
+    currentlyOverflowed.add(item.btn.id);
+
+    // Add to kebab menu
+    const menuItem = document.createElement('button');
+    menuItem.dataset.for = item.btn.id;
+    menuItem.innerHTML = `<span>${item.icon}</span> ${item.label}`;
+    menuItem.addEventListener('click', () => {
+      kebabMenu.classList.add('hidden');
+      item.btn.click();
+    });
+    kebabMenu.appendChild(menuItem);
+  }
+
+  // Show kebab button
+  kebabMenuBtn.style.display = 'flex';
+}
+
+// Run on load and resize
+window.addEventListener('resize', updateKebabOverflow);
+// Delay initial check to ensure layout is complete
+setTimeout(updateKebabOverflow, 100);
 
 // Set up IntersectionObserver for infinite scroll
 const loadSentinel = document.getElementById('load_sentinel');

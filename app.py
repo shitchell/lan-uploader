@@ -1414,29 +1414,14 @@ async def search_files(
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of results")
 ) -> Dict[str, Any]:
     """
-    Search for files and directories by name.
+    Search for files by name.
 
-    - **q**: Search query (searches filename and directory name)
+    - **q**: Search query (searches filename)
     - **limit**: Maximum number of results (default: 100, max: 1000)
 
-    Returns list of matching files and directories with metadata.
-    Directories are returned first, followed by files, both sorted by name.
+    Returns list of matching files with metadata, sorted by name.
     """
-    query_lower = q.lower()
     results = []
-
-    # Search directories from filesystem
-    for path in UPLOAD_ROOT.rglob('*'):
-        if path.is_dir() and not any(part.startswith('.') for part in path.relative_to(UPLOAD_ROOT).parts):
-            if query_lower in path.name.lower():
-                rel_path = path.relative_to(UPLOAD_ROOT).as_posix()
-                parent = path.parent.relative_to(UPLOAD_ROOT).as_posix() if path.parent != UPLOAD_ROOT else ""
-                results.append({
-                    "name": path.name,
-                    "path": rel_path,
-                    "parent_path": parent,
-                    "is_directory": True,
-                })
 
     # Search files from database
     file_results = db.search(q, limit=limit)
@@ -1454,11 +1439,8 @@ async def search_files(
             "is_directory": False,
         })
 
-    # Sort: directories first, then by name
-    results.sort(key=lambda x: (not x["is_directory"], x["name"].lower()))
-
-    # Apply limit after combining
-    results = results[:limit]
+    # Sort by name
+    results.sort(key=lambda x: x["name"].lower())
 
     return {
         "ok": True,

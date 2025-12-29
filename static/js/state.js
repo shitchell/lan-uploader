@@ -36,4 +36,7 @@ export const state = {
 
   // Fullscreen gallery mode
   isFullscreen: false,
+
+  // Version tracking
+  lastSeenVersion: localStorage.getItem('last_seen_version') || null,
 };

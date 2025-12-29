@@ -176,6 +176,22 @@
     </div>
   </div>
 
+<!-- Changelog Modal -->
+<div id="changelog_modal" class="modal hidden">
+  <div class="modal-content changelog-modal-content">
+    <div class="modal-header flex-between">
+      <h2 id="changelog_version">What's New</h2>
+      <button id="close_changelog_modal" class="close-btn flex-center">&times;</button>
+    </div>
+    <div class="modal-body changelog-body">
+      <div id="changelog_content" class="changelog-content"></div>
+    </div>
+    <div class="modal-footer flex-row">
+      <button id="dismiss_changelog" class="primary-btn">Got it!</button>
+    </div>
+  </div>
+</div>
+
 <script src="{{ static_url('js/websocket-client.js') }}"></script>
 <script type="module" src="{{ static_url('js/app.js') }}"></script>
 </body>

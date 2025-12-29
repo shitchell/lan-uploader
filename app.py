@@ -26,6 +26,9 @@ from concurrent.futures import ThreadPoolExecutor
 from models import DatabaseManager, FileIndex
 from thumbnails import ThumbnailGenerator
 
+# Application version - update this when releasing new features
+__version__ = "2.0.0"
+
 # Thread pool for CPU-bound thumbnail generation (prevents blocking async event loop)
 _thumbnail_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="thumbnail")
 
@@ -1600,8 +1603,85 @@ async def healthz() -> Dict[str, Any]:
     return {
         "ok": True,
         "root": str(UPLOAD_ROOT),
-        "version": "2.0.0"
+        "version": __version__
     }
+
+
+# ---- Changelog Endpoints ----
+
+# Directory containing changelog markdown files
+CHANGELOGS_DIR = Path(__file__).parent / "changelogs"
+
+
+@app.get("/api/changelog", tags=["Changelog"])
+async def get_changelog(version: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Get changelog content.
+
+    Args:
+        version: Optional specific version to get changelog for.
+                 If not provided, returns the latest version changelog.
+
+    Returns:
+        JSON with version and markdown content.
+    """
+    if not CHANGELOGS_DIR.exists():
+        raise HTTPException(status_code=404, detail="No changelogs available")
+
+    if version:
+        # Get specific version
+        changelog_file = CHANGELOGS_DIR / f"{version}.md"
+        if not changelog_file.exists():
+            raise HTTPException(
+                status_code=404,
+                detail=f"Changelog for version {version} not found"
+            )
+    else:
+        # Get latest version (current __version__)
+        changelog_file = CHANGELOGS_DIR / f"{__version__}.md"
+        if not changelog_file.exists():
+            raise HTTPException(
+                status_code=404,
+                detail="Changelog not found for current version"
+            )
+        version = __version__
+
+    content = changelog_file.read_text()
+
+    return {
+        "ok": True,
+        "version": version,
+        "content": content
+    }
+
+
+@app.get("/api/changelog/versions", tags=["Changelog"])
+async def get_changelog_versions() -> Dict[str, Any]:
+    """
+    Get list of all available changelog versions.
+
+    Returns:
+        JSON with list of versions in descending order.
+    """
+    if not CHANGELOGS_DIR.exists():
+        return {"ok": True, "versions": []}
+
+    versions = []
+    for file in CHANGELOGS_DIR.glob("*.md"):
+        # Extract version from filename (e.g., "2.0.0.md" -> "2.0.0")
+        version = file.stem
+        versions.append(version)
+
+    # Sort versions in descending order (newest first)
+    # Use semantic versioning comparison
+    def version_key(v: str) -> tuple:
+        parts = v.split('.')
+        return tuple(int(p) if p.isdigit() else 0 for p in parts)
+
+    versions.sort(key=version_key, reverse=True)
+
+    return {"ok": True, "versions": versions}
+
 
 # ---- Deprecated Routes (for backwards compatibility) ----
 

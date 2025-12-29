@@ -50,6 +50,7 @@ import {
   isMobileSearchActive,
   setSearchResultHandler,
 } from './search.js';
+import { checkVersion, initChangelog, closeChangelog } from './changelog.js';
 
 // ===== Wire up cross-module handlers =====
 
@@ -59,12 +60,14 @@ function isAnyModalOpen() {
   const uploadModal = document.getElementById('upload_modal');
   const searchModal = document.getElementById('search_modal');
   const newFolderModal = document.getElementById('new_folder_modal');
+  const changelogModal = document.getElementById('changelog_modal');
 
   return (
     !previewModal.classList.contains('hidden') ||
     !uploadModal.classList.contains('hidden') ||
     !searchModal.classList.contains('hidden') ||
-    !newFolderModal.classList.contains('hidden')
+    !newFolderModal.classList.contains('hidden') ||
+    !changelogModal.classList.contains('hidden')
   );
 }
 
@@ -436,6 +439,9 @@ document.addEventListener('keydown', (e) => {
     if (!previewModal.classList.contains('hidden')) closePreview();
     if (!searchModal.classList.contains('hidden')) closeSearchModal();
     if (!newFolderModal.classList.contains('hidden')) closeNewFolderModal();
+
+    const changelogModal = document.getElementById('changelog_modal');
+    if (!changelogModal.classList.contains('hidden')) closeChangelog();
   }
 
   // Arrow key navigation in preview modal OR fullscreen mode
@@ -518,3 +524,7 @@ if (loadSentinel) {
 // Load initial directory from URL hash
 const initialPath = window.location.hash.slice(1).split('/').map(decodeURIComponent).join('/');
 navigateTo(initialPath, false);
+
+// Initialize changelog and check version
+initChangelog();
+checkVersion();

@@ -86,3 +86,21 @@ export function getThumbnailUrl(path) {
 export function getDirectoryDownloadUrl(path) {
   return `/api/download-dir/${path}`;
 }
+
+export async function getServerVersion() {
+  const response = await fetch('/healthz');
+  if (!response.ok) {
+    throw new Error('Failed to get server version');
+  }
+  const data = await response.json();
+  return data.version;
+}
+
+export async function getChangelog(version = null) {
+  const url = version ? `/api/changelog?version=${version}` : '/api/changelog';
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error('Failed to load changelog');
+  }
+  return response.json();
+}

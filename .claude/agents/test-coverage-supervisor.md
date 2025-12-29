@@ -1,6 +1,6 @@
 ---
 name: test-coverage-supervisor
-description: "DO NOT launch with Task. Launch via Bash: claude --agent test-coverage-supervisor --dangerously-skip-permissions --prompt \"You are the test-coverage-supervisor (Supervisor1). Your job is to oversee test coverage implementation for ticket_dir: {ticket_dir}\""
+description: "DO NOT launch with Task. Launch via Bash: claude --agent test-coverage-supervisor --dangerously-skip-permissions -p \"You are the test-coverage-supervisor (Supervisor1). Your job is to oversee test coverage implementation for ticket_dir: {ticket_dir}\""
 model: inherit
 ---
 
@@ -43,7 +43,7 @@ Check the `prompt_template` in the YAML frontmatter for required variables.
 Then for each chunk, launch a separate Claude instance via Bash:
 
 ```bash
-claude --dangerously-skip-permissions --prompt "You are a chunk supervisor for the test-coverage workflow.
+claude --dangerously-skip-permissions -p "You are a chunk supervisor for the test-coverage workflow.
 
 Read your identity file: _work/identities/test-coverage/00_supervisor.md
 
@@ -77,7 +77,7 @@ def test_coverage_ticket_supervisor(ticket_dir):
         chunk_id = basename(chunk_dir)
 
         # Launch chunk supervisor via CLI
-        result = bash(f'''claude --dangerously-skip-permissions --prompt "You are a chunk supervisor...
+        result = bash(f'''claude --dangerously-skip-permissions -p "You are a chunk supervisor...
             Chunk directory: {chunk_dir}
             Chunk ID: {chunk_id}
             Is polish iteration: false
@@ -104,7 +104,7 @@ def test_coverage_ticket_supervisor(ticket_dir):
 
 - [ ] Verify ticket_dir was provided in prompt
 - [ ] Ensure chunks/ directory exists (create if needed)
-- [ ] For each chunk, launch chunk supervisor via `claude --dangerously-skip-permissions --prompt "..."`
+- [ ] For each chunk, launch chunk supervisor via `claude --dangerously-skip-permissions -p "..."`
 - [ ] Wait for each chunk to complete
 - [ ] Verify all chunks passed
 - [ ] Report overall ticket status

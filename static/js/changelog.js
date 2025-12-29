@@ -64,7 +64,7 @@ function markdownToHtml(markdown) {
 export function openChangelog(version, content) {
   const { modal, version: versionEl, content: contentEl } = getElements();
 
-  versionEl.textContent = `Version ${version}`;
+  versionEl.textContent = "What's new!";
   contentEl.innerHTML = markdownToHtml(content);
   modal.classList.remove('hidden');
 }
@@ -94,16 +94,18 @@ export function dismissChangelog(version) {
 export async function checkVersion() {
   try {
     const serverVersion = await getServerVersion();
+    let showChangelog = false;
 
     // If no last seen version, this is first visit - save and don't show
     if (!state.lastSeenVersion) {
       localStorage.setItem('last_seen_version', serverVersion);
       state.lastSeenVersion = serverVersion;
-      return;
+      // Unless this is version 2.0.0, then show the version :p
+      if (state.lastSeenVersion === "2.0.0") showChangelog = true;
     }
 
     // If versions match, nothing to do
-    if (state.lastSeenVersion === serverVersion) {
+    if (!showChangelog && state.lastSeenVersion === serverVersion) {
       return;
     }
 

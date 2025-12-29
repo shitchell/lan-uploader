@@ -909,5 +909,332 @@ class TestJavaScriptExecution:
         assert initial_class != new_class
 
 
+class TestChangelogModal:
+    """Test changelog modal functionality."""
+
+    def test_changelog_modal_exists(self, page: Page, app_server: str):
+        """Test that the changelog modal exists in the DOM."""
+        page.goto(app_server)
+        page.wait_for_load_state("networkidle")
+
+        modal = page.locator("#changelog_modal")
+        expect(modal).to_be_attached()
+        # Modal should start hidden
+        expect(modal).to_have_class(re.compile(r".*\bhidden\b.*"))
+
+    def test_changelog_modal_has_required_elements(self, page: Page, app_server: str):
+        """Test that changelog modal has all required elements."""
+        page.goto(app_server)
+        page.wait_for_load_state("networkidle")
+
+        # Check version header
+        version_el = page.locator("#changelog_version")
+        expect(version_el).to_be_attached()
+
+        # Check content container
+        content_el = page.locator("#changelog_content")
+        expect(content_el).to_be_attached()
+
+        # Check close button
+        close_btn = page.locator("#close_changelog_modal")
+        expect(close_btn).to_be_attached()
+
+        # Check dismiss button
+        dismiss_btn = page.locator("#dismiss_changelog")
+        expect(dismiss_btn).to_be_attached()
+        expect(dismiss_btn).to_have_text("Got it!")
+
+    def test_changelog_not_shown_on_first_visit(self, page: Page, app_server: str):
+        """Test that changelog modal is not shown on first visit (no localStorage)."""
+        # Clear localStorage before navigating
+        page.goto(app_server)
+        page.evaluate("localStorage.clear()")
+
+        # Reload page
+        page.reload()
+        page.wait_for_load_state("networkidle")
+        time.sleep(0.5)  # Wait for version check to complete
+
+        # Modal should remain hidden (first visit silently sets version)
+        modal = page.locator("#changelog_modal")
+        expect(modal).to_have_class(re.compile(r".*\bhidden\b.*"))
+
+        # localStorage should now have last_seen_version set
+        version = page.evaluate("localStorage.getItem('last_seen_version')")
+        assert version is not None
+        assert len(version) > 0
+
+    def test_changelog_shown_on_version_change(self, page: Page, app_server: str):
+        """Test that changelog modal shows when version changes."""
+        page.goto(app_server)
+        page.wait_for_load_state("networkidle")
+
+        # Set a fake old version in localStorage
+        page.evaluate("localStorage.setItem('last_seen_version', '0.0.1')")
+
+        # Reload page - should show changelog
+        page.reload()
+        page.wait_for_load_state("networkidle")
+
+        # Wait for version check to complete
+        time.sleep(0.5)
+
+        # Modal should be visible
+        modal = page.locator("#changelog_modal")
+        expect(modal).not_to_have_class(re.compile(r".*\bhidden\b.*"))
+        expect(modal).to_be_visible()
+
+    def test_changelog_close_button(self, page: Page, app_server: str):
+        """Test that close button hides the modal."""
+        page.goto(app_server)
+        page.evaluate("localStorage.setItem('last_seen_version', '0.0.1')")
+        page.reload()
+        page.wait_for_load_state("networkidle")
+        time.sleep(0.5)
+
+        modal = page.locator("#changelog_modal")
+        expect(modal).to_be_visible()
+
+        # Click close button
+        close_btn = page.locator("#close_changelog_modal")
+        close_btn.click()
+
+        # Modal should be hidden
+        expect(modal).not_to_be_visible()
+
+    def test_changelog_dismiss_updates_storage(self, page: Page, app_server: str):
+        """Test that dismiss button updates localStorage."""
+        page.goto(app_server)
+
+        # Get current server version
+        version = page.evaluate("""
+            async () => {
+                const response = await fetch('/healthz');
+                const data = await response.json();
+                return data.version;
+            }
+        """)
+
+        # Set old version
+        page.evaluate("localStorage.setItem('last_seen_version', '0.0.1')")
+        page.reload()
+        page.wait_for_load_state("networkidle")
+        time.sleep(0.5)
+
+        # Click dismiss button
+        dismiss_btn = page.locator("#dismiss_changelog")
+        dismiss_btn.click()
+
+        # Modal should close
+        modal = page.locator("#changelog_modal")
+        expect(modal).not_to_be_visible()
+
+        # Wait for localStorage update
+        time.sleep(0.3)
+
+        # localStorage should be updated to current version
+        stored_version = page.evaluate("localStorage.getItem('last_seen_version')")
+        assert stored_version == version
+
+    def test_changelog_not_shown_after_dismiss(self, page: Page, app_server: str):
+        """Test that changelog is not shown again after dismiss."""
+        page.goto(app_server)
+
+        # Set old version and trigger changelog
+        page.evaluate("localStorage.setItem('last_seen_version', '0.0.1')")
+        page.reload()
+        page.wait_for_load_state("networkidle")
+        time.sleep(0.5)
+
+        # Dismiss the changelog
+        dismiss_btn = page.locator("#dismiss_changelog")
+        dismiss_btn.click()
+
+        # Wait for dismiss to complete
+        time.sleep(0.3)
+
+        # Reload page
+        page.reload()
+        page.wait_for_load_state("networkidle")
+        time.sleep(0.5)
+
+        # Modal should not appear
+        modal = page.locator("#changelog_modal")
+        expect(modal).to_have_class(re.compile(r".*\bhidden\b.*"))
+
+    def test_changelog_escape_closes_modal(self, page: Page, app_server: str):
+        """Test that Escape key closes the changelog modal."""
+        page.goto(app_server)
+        page.evaluate("localStorage.setItem('last_seen_version', '0.0.1')")
+        page.reload()
+        page.wait_for_load_state("networkidle")
+        time.sleep(0.5)
+
+        modal = page.locator("#changelog_modal")
+        expect(modal).to_be_visible()
+
+        # Press Escape
+        page.keyboard.press("Escape")
+
+        # Modal should close
+        expect(modal).not_to_be_visible()
+
+
+class TestChangelogContent:
+    """Test changelog content rendering."""
+
+    def test_changelog_displays_version_number(self, page: Page, app_server: str):
+        """Test that changelog modal displays the version number."""
+        page.goto(app_server)
+        page.evaluate("localStorage.setItem('last_seen_version', '0.0.1')")
+        page.reload()
+        page.wait_for_load_state("networkidle")
+        time.sleep(0.5)
+
+        version_el = page.locator("#changelog_version")
+        expect(version_el).to_contain_text("Version")
+
+        # Version should be a valid format (e.g., "Version 2.0.0")
+        version_text = version_el.inner_text()
+        assert re.match(r"Version \d+\.\d+\.\d+", version_text)
+
+    def test_changelog_renders_markdown_headers(self, page: Page, app_server: str):
+        """Test that markdown headers are rendered as HTML."""
+        page.goto(app_server)
+        page.evaluate("localStorage.setItem('last_seen_version', '0.0.1')")
+        page.reload()
+        page.wait_for_load_state("networkidle")
+        time.sleep(0.5)
+
+        content = page.locator("#changelog_content")
+        # Should have rendered h2 or h3 elements from ## headers
+        headers = content.locator("h2, h3")
+        expect(headers.first).to_be_visible()
+
+    def test_changelog_renders_markdown_lists(self, page: Page, app_server: str):
+        """Test that markdown lists are rendered as HTML."""
+        page.goto(app_server)
+        page.evaluate("localStorage.setItem('last_seen_version', '0.0.1')")
+        page.reload()
+        page.wait_for_load_state("networkidle")
+        time.sleep(0.5)
+
+        content = page.locator("#changelog_content")
+        # Should have rendered ul/li elements from - items
+        lists = content.locator("ul")
+        expect(lists.first).to_be_visible()
+
+        # Should have list items
+        items = content.locator("li")
+        expect(items.first).to_be_visible()
+        # Check there are multiple list items (2.0.0 changelog has many)
+        assert items.count() >= 5
+
+    def test_changelog_content_scrollable(self, page: Page, app_server: str):
+        """Test that changelog content is scrollable if too long."""
+        page.goto(app_server)
+        page.evaluate("localStorage.setItem('last_seen_version', '0.0.1')")
+        page.reload()
+        page.wait_for_load_state("networkidle")
+        time.sleep(0.5)
+
+        body = page.locator(".changelog-body")
+        # Check that overflow-y is auto
+        overflow = body.evaluate("el => getComputedStyle(el).overflowY")
+        assert overflow == "auto"
+
+    def test_changelog_has_expected_sections(self, page: Page, app_server: str):
+        """Test that changelog displays expected sections (Features, Improvements, Bug Fixes)."""
+        page.goto(app_server)
+        page.evaluate("localStorage.setItem('last_seen_version', '0.0.1')")
+        page.reload()
+        page.wait_for_load_state("networkidle")
+        time.sleep(0.5)
+
+        content = page.locator("#changelog_content")
+        content_text = content.inner_text()
+
+        # 2.0.0 changelog has these sections
+        assert "Features" in content_text
+        assert "Improvements" in content_text
+        assert "Bug Fixes" in content_text
+
+
+class TestChangelogAPIFromBrowser:
+    """Test changelog API from browser context."""
+
+    def test_healthz_has_version(self, page: Page, app_server: str):
+        """Test that /healthz returns version in browser."""
+        page.goto(app_server)
+        page.wait_for_load_state("networkidle")
+
+        result = page.evaluate("""
+            async () => {
+                const response = await fetch('/healthz');
+                const data = await response.json();
+                return data;
+            }
+        """)
+
+        assert "version" in result
+        assert result["ok"] is True
+        # Version should be a valid semver string
+        version = result["version"]
+        assert len(version.split('.')) >= 2
+
+    def test_changelog_api_accessible(self, page: Page, app_server: str):
+        """Test that /api/changelog is accessible from browser."""
+        page.goto(app_server)
+        page.wait_for_load_state("networkidle")
+
+        result = page.evaluate("""
+            async () => {
+                const response = await fetch('/api/changelog');
+                const data = await response.json();
+                return { ok: response.ok, data: data };
+            }
+        """)
+
+        assert result["ok"] is True
+        assert result["data"]["ok"] is True
+        assert "version" in result["data"]
+        assert "content" in result["data"]
+
+    def test_changelog_versions_api_accessible(self, page: Page, app_server: str):
+        """Test that /api/changelog/versions is accessible from browser."""
+        page.goto(app_server)
+        page.wait_for_load_state("networkidle")
+
+        result = page.evaluate("""
+            async () => {
+                const response = await fetch('/api/changelog/versions');
+                const data = await response.json();
+                return data;
+            }
+        """)
+
+        assert result["ok"] is True
+        assert "versions" in result
+        assert isinstance(result["versions"], list)
+        assert len(result["versions"]) >= 1
+
+    def test_changelog_api_returns_markdown_content(self, page: Page, app_server: str):
+        """Test that changelog API returns valid markdown content."""
+        page.goto(app_server)
+        page.wait_for_load_state("networkidle")
+
+        result = page.evaluate("""
+            async () => {
+                const response = await fetch('/api/changelog');
+                const data = await response.json();
+                return data.content;
+            }
+        """)
+
+        # Should contain markdown elements
+        assert "#" in result  # Headers
+        assert "- " in result  # List items
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--headed"])

@@ -991,6 +991,94 @@ class TestSyncEndpoint:
         assert data["thumbnails_generated"] == 0
 
 
+class TestChangelogEndpoint:
+    """Tests for the /api/changelog endpoints."""
+
+    def test_changelog_returns_current_version(self, client: TestClient):
+        """Test that /api/changelog returns the current version changelog."""
+        response = client.get("/api/changelog")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["ok"] is True
+        assert "version" in data
+        assert "content" in data
+        assert len(data["content"]) > 0
+        # Content should contain typical changelog sections
+        assert "Features" in data["content"] or "Improvements" in data["content"] or "Bug Fixes" in data["content"]
+
+    def test_changelog_returns_specific_version(self, client: TestClient):
+        """Test that /api/changelog?version=X returns specific version."""
+        # First get current version
+        health_response = client.get("/healthz")
+        current_version = health_response.json()["version"]
+
+        # Request that specific version
+        response = client.get(f"/api/changelog?version={current_version}")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["ok"] is True
+        assert data["version"] == current_version
+        assert len(data["content"]) > 0
+
+    def test_changelog_nonexistent_version_returns_404(self, client: TestClient):
+        """Test that requesting non-existent version returns 404."""
+        response = client.get("/api/changelog?version=99.99.99")
+        assert response.status_code == 404
+        assert "not found" in response.json()["detail"].lower()
+
+    def test_changelog_versions_returns_list(self, client: TestClient):
+        """Test that /api/changelog/versions returns list of versions."""
+        response = client.get("/api/changelog/versions")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["ok"] is True
+        assert "versions" in data
+        assert isinstance(data["versions"], list)
+        assert len(data["versions"]) >= 1
+
+    def test_changelog_versions_sorted_descending(self, client: TestClient):
+        """Test that versions are sorted in descending order."""
+        response = client.get("/api/changelog/versions")
+        data = response.json()
+
+        versions = data["versions"]
+        if len(versions) > 1:
+            # Verify descending order
+            def version_tuple(v):
+                return tuple(int(p) if p.isdigit() else 0 for p in v.split('.'))
+
+            for i in range(len(versions) - 1):
+                assert version_tuple(versions[i]) >= version_tuple(versions[i + 1])
+
+    def test_changelog_versions_includes_current(self, client: TestClient):
+        """Test that versions list includes the current app version."""
+        # Get current version from healthz
+        health_response = client.get("/healthz")
+        current_version = health_response.json()["version"]
+
+        # Get versions list
+        response = client.get("/api/changelog/versions")
+        data = response.json()
+
+        assert current_version in data["versions"]
+
+    def test_changelog_content_is_markdown(self, client: TestClient):
+        """Test that changelog content is valid markdown with expected structure."""
+        response = client.get("/api/changelog")
+        assert response.status_code == 200
+
+        data = response.json()
+        content = data["content"]
+
+        # Should contain markdown headers (# or ##)
+        assert "#" in content
+        # Should contain list items (- )
+        assert "- " in content
+
+
 class TestThumbnails:
     """Tests for the thumbnail generation endpoint."""
 

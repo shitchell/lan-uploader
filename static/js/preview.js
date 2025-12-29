@@ -28,6 +28,37 @@ export function setFileDeletedHandler(handler) {
   onFileDeleted = handler;
 }
 
+/**
+ * Generate HTML content for previewing a file based on its type.
+ * This is the single source of truth for preview content generation.
+ * @param {Object} file - File object with preview_type, path, name, size, mime_type
+ * @returns {Promise<string>} HTML string for the preview content
+ */
+async function generatePreviewContentHtml(file) {
+  if (file.preview_type === 'image') {
+    return `<img src="${getFileUrl(file.path)}" alt="${escapeHtml(file.name)}">`;
+  } else if (file.preview_type === 'video') {
+    return `<video controls src="${getFileUrl(file.path)}"></video>`;
+  } else if (file.preview_type === 'audio') {
+    return `<audio controls src="${getFileUrl(file.path)}"></audio>`;
+  } else if (file.preview_type === 'text' || file.preview_type === 'code') {
+    const data = await fetchTextPreview(file.path);
+    const truncatedNote = data.truncated
+      ? `<p class="muted">(Showing first 1000 chars of ${formatFileSize(data.size)})</p>`
+      : '';
+    return `<pre>${escapeHtml(data.content)}</pre>${truncatedNote}`;
+  } else {
+    return `
+      <div class="muted">
+        <p>Preview not available for this file type</p>
+        <p>File: ${escapeHtml(file.name)}</p>
+        <p>Size: ${formatFileSize(file.size)}</p>
+        <p>Type: ${file.mime_type || 'unknown'}</p>
+      </div>
+    `;
+  }
+}
+
 export async function openPreview(file) {
   const { modal, filename, content } = getElements();
 
@@ -37,28 +68,7 @@ export async function openPreview(file) {
   modal.classList.remove('hidden');
 
   try {
-    if (file.preview_type === 'image') {
-      content.innerHTML = `<img src="${getFileUrl(file.path)}" alt="${escapeHtml(file.name)}">`;
-    } else if (file.preview_type === 'video') {
-      content.innerHTML = `<video controls src="${getFileUrl(file.path)}"></video>`;
-    } else if (file.preview_type === 'audio') {
-      content.innerHTML = `<audio controls src="${getFileUrl(file.path)}"></audio>`;
-    } else if (file.preview_type === 'text' || file.preview_type === 'code') {
-      const data = await fetchTextPreview(file.path);
-      const truncatedNote = data.truncated
-        ? `<p class="muted">(Showing first 1000 chars of ${formatFileSize(data.size)})</p>`
-        : '';
-      content.innerHTML = `<pre>${escapeHtml(data.content)}</pre>${truncatedNote}`;
-    } else {
-      content.innerHTML = `
-        <div class="muted">
-          <p>Preview not available for this file type</p>
-          <p>File: ${escapeHtml(file.name)}</p>
-          <p>Size: ${formatFileSize(file.size)}</p>
-          <p>Type: ${file.mime_type || 'unknown'}</p>
-        </div>
-      `;
-    }
+    content.innerHTML = await generatePreviewContentHtml(file);
   } catch (error) {
     content.innerHTML = `<p class="muted">Failed to load preview: ${error.message}</p>`;
   }
@@ -92,30 +102,9 @@ async function updatePreviewContent(file) {
   // Wait for fade out transition (150ms matches CSS transition duration)
   await new Promise(resolve => setTimeout(resolve, 150));
 
-  // Generate new content based on file type
+  // Generate new content
   try {
-    if (file.preview_type === 'image') {
-      content.innerHTML = `<img src="${getFileUrl(file.path)}" alt="${escapeHtml(file.name)}">`;
-    } else if (file.preview_type === 'video') {
-      content.innerHTML = `<video controls src="${getFileUrl(file.path)}"></video>`;
-    } else if (file.preview_type === 'audio') {
-      content.innerHTML = `<audio controls src="${getFileUrl(file.path)}"></audio>`;
-    } else if (file.preview_type === 'text' || file.preview_type === 'code') {
-      const data = await fetchTextPreview(file.path);
-      const truncatedNote = data.truncated
-        ? `<p class="muted">(Showing first 1000 chars of ${formatFileSize(data.size)})</p>`
-        : '';
-      content.innerHTML = `<pre>${escapeHtml(data.content)}</pre>${truncatedNote}`;
-    } else {
-      content.innerHTML = `
-        <div class="muted">
-          <p>Preview not available for this file type</p>
-          <p>File: ${escapeHtml(file.name)}</p>
-          <p>Size: ${formatFileSize(file.size)}</p>
-          <p>Type: ${file.mime_type || 'unknown'}</p>
-        </div>
-      `;
-    }
+    content.innerHTML = await generatePreviewContentHtml(file);
   } catch (error) {
     content.innerHTML = `<p class="muted">Failed to load preview: ${error.message}</p>`;
   }
@@ -361,7 +350,15 @@ export async function enterFullscreen() {
  * Exit fullscreen gallery mode
  */
 export async function exitFullscreen() {
-  const { gallery } = getFullscreenElements();
+  const { gallery, content: fullscreenContent } = getFullscreenElements();
+  const { filename, content: previewContent } = getElements();
+
+  // Sync preview modal with current state before exiting
+  // (user may have navigated to a different file while in fullscreen)
+  if (state.currentPreviewFile) {
+    filename.textContent = state.currentPreviewFile.name;
+    previewContent.innerHTML = fullscreenContent.innerHTML;
+  }
 
   // Hide the fullscreen container
   gallery.classList.add('hidden');
@@ -459,30 +456,9 @@ async function updateFullscreenContent(file) {
   content.style.opacity = '0';
   await new Promise(resolve => setTimeout(resolve, 150));
 
-  // Generate content based on file type
+  // Generate content
   try {
-    if (file.preview_type === 'image') {
-      content.innerHTML = `<img src="${getFileUrl(file.path)}" alt="${escapeHtml(file.name)}">`;
-    } else if (file.preview_type === 'video') {
-      content.innerHTML = `<video controls src="${getFileUrl(file.path)}"></video>`;
-    } else if (file.preview_type === 'audio') {
-      content.innerHTML = `<audio controls src="${getFileUrl(file.path)}"></audio>`;
-    } else if (file.preview_type === 'text' || file.preview_type === 'code') {
-      const data = await fetchTextPreview(file.path);
-      const truncatedNote = data.truncated
-        ? `<p class="muted">(Showing first 1000 chars of ${formatFileSize(data.size)})</p>`
-        : '';
-      content.innerHTML = `<pre>${escapeHtml(data.content)}</pre>${truncatedNote}`;
-    } else {
-      content.innerHTML = `
-        <div class="muted">
-          <p>Preview not available for this file type</p>
-          <p>File: ${escapeHtml(file.name)}</p>
-          <p>Size: ${formatFileSize(file.size)}</p>
-          <p>Type: ${file.mime_type || 'unknown'}</p>
-        </div>
-      `;
-    }
+    content.innerHTML = await generatePreviewContentHtml(file);
   } catch (error) {
     content.innerHTML = `<p class="muted">Failed to load preview: ${error.message}</p>`;
   }

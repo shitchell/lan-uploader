@@ -28,7 +28,7 @@ body {
   z-index: 100;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--pad);
 }
 
 /* .header-actions uses .flex-row class in HTML */
@@ -212,7 +212,7 @@ button:active {
   align-items: center;
   overflow: hidden;
   white-space: nowrap;
-  padding: 4px 0; /* room for button padding */
+  padding: 0; /* room for button padding */
 }
 
 /* Inner scrollable container */
@@ -936,6 +936,7 @@ body.select-mode .folder-item {
   max-width: 90%;
   max-height: 100%;
   overflow: auto;
+  white-space: pre-wrap;
   font-size: 14px;
 }
 
